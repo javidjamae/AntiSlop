@@ -17,8 +17,13 @@ import { readFileSync, existsSync } from 'node:fs'
 import { dirname, join, resolve, parse as parsePath } from 'node:path'
 import { lint, format, type Violation } from './index.js'
 import { resolveConfig, type AntislopConfig, type ResolvedConfig } from './config.js'
+import { VERSION } from './version.js'
 
 const args = process.argv.slice(2)
+if (args.includes('--version')) {
+  console.log(VERSION)
+  process.exit(0)
+}
 const strict = args.includes('--strict')
 const asJson = args.includes('--json')
 const explicitConfig = args.find((a) => a.startsWith('--config='))?.slice('--config='.length)

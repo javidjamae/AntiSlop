@@ -28,4 +28,4 @@ jobs:
 
       # The linter's own docs must pass their own strict lint — the README
       # promises it. A doc edit that introduces slop fails CI here.
-      - run: node dist/cli.js README.md RULES.md --strict
+      - run: node dist/cli.js README.md RULES.md CHANGELOG.md --strict

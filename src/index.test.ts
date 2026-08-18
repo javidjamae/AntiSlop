@@ -1,6 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { lint, NEUTRAL, STRICT, demonstrativeHeadings, headingDependentOpeners, resolveConfig } from './index.js'
+import { VERSION } from './version.js'
+
+test('VERSION matches package.json (release script syncs both)', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  assert.equal(VERSION, pkg.version)
+})
 
 const rulesOf = (t: string, rules = STRICT) => lint(t, rules).map((v) => v.rule)
 
