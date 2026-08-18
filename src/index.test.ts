@@ -127,7 +127,7 @@ test('arrows: breadcrumb, pipeline, and back-link are exempt; prose arrows still
   assert.ok(!rulesOf('← All guides').includes('arrow-symbol'))
   assert.ok(rulesOf('this leads → that').includes('arrow-symbol'))
   assert.ok(rulesOf('more slop → worse writing').includes('arrow-symbol'))
-  assert.ok(rulesOf('do it 👉 now').includes('arrow-symbol'))
+  assert.ok(!rulesOf('do it 👉 now').includes('arrow-symbol')) // an emoji, owned by emoji-decoration
 })
 
 test('arrows: trailing-CTA exemption is config opt-in, off by default', () => {
@@ -135,6 +135,24 @@ test('arrows: trailing-CTA exemption is config opt-in, off by default', () => {
   assert.ok(lint(cta, STRICT).some((v) => v.rule === 'arrow-symbol'))
   assert.ok(!lint(cta, STRICT, undefined, { arrows: { trailingCta: true } }).some((v) => v.rule === 'arrow-symbol'))
   assert.ok(!lint('[Read the docs →](https://example.com)', STRICT, undefined, { arrows: { trailingCta: true } }).some((v) => v.rule === 'arrow-symbol'))
+})
+
+
+test('arrow-symbol: astral emoji never match the arrow class (surrogate-pair bug)', () => {
+  // Without the u flag the class matched either code unit of an astral char,
+  // so every emoji sharing the U+D83D high surrogate read as an arrow.
+  for (const e of ['🚀 launch', '🔗 link', '💀 skull', '📷 photo', '🐀 rat', '😀 grin', '👉 here']) {
+    assert.equal(lint(e, STRICT).filter((v) => v.rule === 'arrow-symbol').length, 0, e)
+  }
+  // Control: these were already clean (U+D83C high surrogate) and stay clean.
+  for (const e of ['⭐ star', '🏆 trophy', '🎯 target']) {
+    assert.equal(lint(e, STRICT).filter((v) => v.rule === 'arrow-symbol').length, 0, e)
+  }
+  // Real arrows still fire.
+  assert.equal(lint('this leads → that', STRICT).filter((v) => v.rule === 'arrow-symbol').length, 1)
+  assert.equal(lint('a ⇒ b and c ← d', STRICT).filter((v) => v.rule === 'arrow-symbol').length, 2)
+  // The pointing hand is still caught, by the rule that owns emoji.
+  assert.ok(lint('do it 👉 now', STRICT).some((v) => v.rule === 'emoji-decoration'))
 })
 
 test('clean prose is clean', () => {

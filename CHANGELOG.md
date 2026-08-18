@@ -6,7 +6,14 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
-_Nothing yet._
+- Fix: `arrow-symbol` no longer flags unrelated emoji. The rule's character
+  class held the pointing-hand emoji without the `u` flag, so it matched
+  either half of that astral character's surrogate pair, silently reporting
+  every emoji sharing the U+D83D high surrogate (roughly U+1F400-U+1F6FF,
+  including the rocket, link, skull, camera and grin emoji) as an arrow, and
+  double-reporting the hand itself. The
+  class is now `u`-flagged and BMP-only; the pointing hand is an emoji and
+  belongs to `emoji-decoration`, which already caught it.
 
 ## 0.3.0 (2026-08-18)
 

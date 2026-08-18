@@ -291,7 +291,7 @@ export function lint(
     const mathBold = /[\u{1D400}-\u{1D7FF}]/gu
     while ((m = mathBold.exec(line))) push(li, m.index, 'unicode-bold', 'Use markdown **bold**, not unicode math characters.')
 
-    const bubble = /💬.{0,60}(Question:|\?)/i
+    const bubble = /💬.{0,60}(Question:|\?)/iu
     if ((m = bubble.exec(line))) push(li, m.index, 'engagement-bait', 'Remove the speech-bubble-before-question. Reads as AI bait.')
 
     // Invisible / nonstandard Unicode — zero-width characters, soft hyphens,
@@ -337,8 +337,14 @@ export function lint(
     // immediate left AND right words are Capitalized/digit/code tokens — and a
     // leading "←" back-link. A trailing "→" external-link CTA is a per-site
     // convention, so that one is opt-in via config (arrowExemptions.trailingCta).
+    // The class is `u`-flagged and holds BMP arrows ONLY. A literal astral
+    // char here (the pointing hand used to be) decomposes into surrogate code
+    // units without `u`, so the class matches EITHER half independently — which
+    // silently flagged every emoji sharing the U+D83D high surrogate (🚀 🔗 💀,
+    // roughly U+1F400-U+1F6FF) as an arrow, and double-reported the hand itself.
+    // The pointing hand is an emoji, so emoji-decoration owns it; arrows do not.
     if (rules.arrows) {
-      const arrow = /[→⇒←👉]/g
+      const arrow = /[→⇒←]/gu
       while ((m = arrow.exec(line))) {
         if (arrowExempt(line, m.index, extras.arrows)) continue
         push(li, m.index, 'arrow-symbol', 'Use "means," "leads to," "so," or restructure.')
