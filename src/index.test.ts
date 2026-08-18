@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { lint, NEUTRAL, STRICT, demonstrativeHeadings, headingDependentOpeners, resolveConfig } from './index.js'
-import { VERSION } from './version.js'
+import { lint, NEUTRAL, STRICT, demonstrativeHeadings, headingDependentOpeners, resolveConfig, VERSION } from './index.js'
+
 
 test('VERSION matches package.json (release script syncs both)', () => {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
@@ -175,6 +175,10 @@ test('arrow-symbol vs emoji-decoration: surrogate-pair regression table', () => 
     assert.equal(arrows, expectedArrows, `${name}: arrow-symbol`)
     assert.equal(emoji, expectedEmoji, `${name}: emoji-decoration`)
   }
+})
+
+test('VERSION is exported from the package entrypoint (consumers read it)', () => {
+  assert.match(VERSION, /^\d+\.\d+\.\d+$/)
 })
 
 test('clean prose is clean', () => {
