@@ -127,7 +127,7 @@ test('arrows: breadcrumb, pipeline, and back-link are exempt; prose arrows still
   assert.ok(!rulesOf('← All guides').includes('arrow-symbol'))
   assert.ok(rulesOf('this leads → that').includes('arrow-symbol'))
   assert.ok(rulesOf('more slop → worse writing').includes('arrow-symbol'))
-  assert.ok(rulesOf('do it 👉 now').includes('arrow-symbol'))
+  assert.ok(!rulesOf('do it 👉 now').includes('arrow-symbol')) // an emoji, owned by emoji-decoration
 })
 
 test('arrows: trailing-CTA exemption is config opt-in, off by default', () => {
@@ -135,6 +135,46 @@ test('arrows: trailing-CTA exemption is config opt-in, off by default', () => {
   assert.ok(lint(cta, STRICT).some((v) => v.rule === 'arrow-symbol'))
   assert.ok(!lint(cta, STRICT, undefined, { arrows: { trailingCta: true } }).some((v) => v.rule === 'arrow-symbol'))
   assert.ok(!lint('[Read the docs →](https://example.com)', STRICT, undefined, { arrows: { trailingCta: true } }).some((v) => v.rule === 'arrow-symbol'))
+})
+
+
+// Regression table for the surrogate-pair class of bug: an astral literal
+// inside a character class without the `u` flag matches either code unit
+// independently. Generated empirically, one codepoint per run. Individual
+// cases would only pin these characters; the table pins the defect class,
+// which reappears the moment another astral literal enters a class.
+//
+// The D83C rows are the control that rules out "the emoji rule bleeds into
+// the arrow rule": they are astral emoji that were never affected. U+2B50 and
+// U+2705 are BMP emoji, same control from the other direction. The final
+// three rows are real arrows and guard against over-correcting the fix.
+const ARROW_EMOJI_TABLE: [string, string, number, number][] = [
+  // char, name, expected arrow-symbol count, expected emoji-decoration count
+  ['\u{1F680}', 'rocket (astral D83D)', 0, 1],
+  ['\u{1F517}', 'link (astral D83D)', 0, 1],
+  ['\u{1F480}', 'skull (astral D83D)', 0, 1],
+  ['\u{1F600}', 'grin (astral D83D)', 0, 1],
+  ['\u{1F4F7}', 'camera (astral D83D)', 0, 1],
+  ['\u{1F400}', 'rat (astral D83D)', 0, 1],
+  ['\u{1F449}', 'pointing hand (astral D83D, double-reported)', 0, 1],
+  ['\u{1F3C6}', 'trophy (astral D83C, control)', 0, 1],
+  ['\u{1F3AF}', 'target (astral D83C, control)', 0, 1],
+  ['\u{1F31F}', 'glowing star (astral D83C, control)', 0, 1],
+  ['\u{2B50}', 'star (BMP emoji, control)', 0, 1],
+  ['\u{2705}', 'check mark (BMP emoji, control)', 0, 1],
+  ['\u{2192}', 'rightwards arrow (real)', 1, 0],
+  ['\u{21D2}', 'double arrow (real)', 1, 0],
+  ['\u{2190}', 'leftwards arrow (real)', 1, 0],
+]
+
+test('arrow-symbol vs emoji-decoration: surrogate-pair regression table', () => {
+  for (const [char, name, expectedArrows, expectedEmoji] of ARROW_EMOJI_TABLE) {
+    const found = lint(`A line with ${char} in it.`, STRICT)
+    const arrows = found.filter((v) => v.rule === 'arrow-symbol').length
+    const emoji = found.filter((v) => v.rule === 'emoji-decoration').length
+    assert.equal(arrows, expectedArrows, `${name}: arrow-symbol`)
+    assert.equal(emoji, expectedEmoji, `${name}: emoji-decoration`)
+  }
 })
 
 test('clean prose is clean', () => {
