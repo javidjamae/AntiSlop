@@ -6,6 +6,10 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.3.0 (2026-08-18)
+
 - `contrast-slop` catches all four forward shapes: negation reasserted across
   a sentence boundary, the comma form ("it's not X, it's Y"),
   "not just X, but Y", and negation + dramatic consequence. Overlapping
