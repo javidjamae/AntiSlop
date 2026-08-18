@@ -6,6 +6,7 @@
 |---|---|---|---|
 | `unicode-bold` | Bold faked with unicode math characters | always | always |
 | `engagement-bait` | Speech-bubble emoji leading into a question | always | always |
+| `invisible-unicode` | Zero-width characters, soft hyphens, directional marks, nonstandard spaces, variation-selector runs, and the Unicode tag block (a documented steganography and prompt-injection channel) | always | always |
 | `em-dash` | Em-dashes in prose | off | on |
 | `ellipsis` | `…` or `...` for dramatic effect | off | on |
 | `arrow-symbol` | `→ ⇒ ← 👉` standing in for words | on | on |
@@ -33,6 +34,24 @@ they shipped anywhere:
   Frame Rates and When to Use Them`). Known residual false positive: a
   mid-heading antecedent (`Replace audio with silence instead of removing
   it`), which needs parsing rather than a regex.
+
+- `invisible-unicode` deliberately ignores the code/quote exemptions the other
+  rules honor: a hidden character inside a code block is more suspicious, not
+  less. Carve-outs for legitimate uses: ZWJ inside emoji sequences, a single
+  VS15/16 giving an emoji or keycap its presentation, ZWNJ/ZWJ adjacent to
+  scripts where they are real orthography (Arabic, Persian, Indic), and a
+  byte-order mark at file position 0.
+
+## What this cannot detect, stated plainly
+
+Statistical watermarks (token-sampling schemes such as green-list/red-list
+bias) leave nothing on the page for any linter to match. Detection requires
+the vendor's key and operates on probability distributions rather than
+characters.
+Any tool claiming to catch them with pattern matching is overclaiming. What
+`invisible-unicode` does catch is the character-level channel: hidden
+codepoints that survive copy-paste and can carry fingerprints or smuggled
+instructions.
 
 ## Explicitly unmechanizable (judgment tier)
 

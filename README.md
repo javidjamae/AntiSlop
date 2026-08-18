@@ -2,7 +2,7 @@
 
 A humanization linter that helps you prevent writing AI slop (or human slop, for that matter).
 
-AntiSlop checks prose for the mechanical tells of AI-generated writing: em-dash overuse, dramatic ellipses, arrow glyphs, "Let's dive in" openers, contrast flourishes, mechanical bolding, engagement bait, headings that point at nothing, and a curated list of AI filler vocabulary. It is deterministic, dependency-free, and fast enough to run on every commit.
+AntiSlop checks prose for the mechanical tells of AI-generated writing: em-dash overuse, dramatic ellipses, arrow glyphs, "Let's dive in" openers, contrast flourishes, mechanical bolding, engagement bait, headings that point at nothing, and a curated list of AI filler vocabulary. It also catches hidden Unicode: zero-width characters, soft hyphens, directional marks, variation-selector runs, and the tag block used for steganography and invisible prompt injection. It is deterministic, dependency-free, and fast enough to run on every commit.
 
 This README passes its own strict lint. Run `antislop --strict README.md` to check.
 
@@ -37,6 +37,33 @@ if (violations.length) console.log(format(violations))
 ```
 
 `lint(text, rules?, bannedPhrases?)` returns `{ line, rule, excerpt, suggestion }` objects. Pass your own phrase list to replace the default vocabulary. Every rule is a boolean on the `RuleSet`, so any profile between `NEUTRAL` and `STRICT` is a spread away.
+
+## Per-project voice: `antislop.config.json`
+
+Drop an `antislop.config.json` at a repo's root and the CLI picks it up for any file under it, wherever the CLI was invoked from. This is how each site expresses its voice to the linter: which rules apply, which phrases are banned for this brand, which defaults it opts out of, and any site-specific patterns.
+
+```json
+{
+  "profile": "strict",
+  "rules": { "emDash": false },
+  "bannedPhrases": {
+    "add": ["synergy", "best-in-class", "world-class"],
+    "remove": ["robust"]
+  },
+  "openers": { "add": ["picture this"] },
+  "customRules": [
+    {
+      "id": "no-passive-belief",
+      "pattern": "\\bwe believe\\b",
+      "suggestion": "State it as fact or attribute it."
+    }
+  ]
+}
+```
+
+`profile` sets the base, `rules` overrides per rule, and the phrase lists take either an `add`/`remove` object (edits the defaults) or a plain array (replaces them). `--strict` on the CLI overrides the config's profile; `--config=path` pins a config explicitly. The same shapes are available in the API through `resolveConfig()`.
+
+One scoping note: a linter is the enforcement half of a voice, the list of things that never ship. The generative half, what your writing should sound like, belongs in your style guide and your prompts. Keep the style guide next to the config, and encode into the config only what a regex can actually hold.
 
 ## Profiles
 

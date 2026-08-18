@@ -120,6 +120,83 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+// ---------- invisible / nonstandard unicode ----------
+
+const INVISIBLE_RE =
+  /[\u00AD\u00A0\u1680\u2000-\u200F\u202A-\u202F\u205F\u2060-\u2064\u2066-\u2069\u3164\uFE00-\uFE0F\uFEFF]|[\u{E0000}-\u{E007F}]|[\u{E0100}-\u{E01EF}]/gu
+
+interface InvisibleMatch {
+  index: number
+  length: number
+  cp: number
+}
+
+function INVISIBLE_RE_MATCHES(line: string): InvisibleMatch[] {
+  const out: InvisibleMatch[] = []
+  let m: RegExpExecArray | null
+  INVISIBLE_RE.lastIndex = 0
+  while ((m = INVISIBLE_RE.exec(line))) {
+    out.push({ index: m.index, length: m[0].length, cp: m[0].codePointAt(0)! })
+  }
+  return out
+}
+
+/** Full code point immediately before code-unit index i, or -1. */
+function cpBefore(line: string, i: number): number {
+  if (i <= 0) return -1
+  const c = line.codePointAt(i - 1)!
+  if (c >= 0xdc00 && c <= 0xdfff && i >= 2) return line.codePointAt(i - 2)!
+  return c
+}
+
+/** Full code point starting at code-unit index i, or -1. */
+function cpAfter(line: string, i: number): number {
+  if (i >= line.length) return -1
+  return line.codePointAt(i)!
+}
+
+const EMOJIISH = /[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u200D\u20E3#*0-9]/u
+function isEmojiish(cp: number): boolean {
+  return cp >= 0 && EMOJIISH.test(String.fromCodePoint(cp))
+}
+
+// Scripts where ZWJ/ZWNJ are real orthography (Arabic, Persian, Indic).
+const JOINER_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\u0900-\u0DFF]/u
+function isJoinerScript(cp: number): boolean {
+  return cp >= 0 && JOINER_SCRIPT.test(String.fromCodePoint(cp))
+}
+
+function isVariationSelector(cp: number): boolean {
+  return (cp >= 0xfe00 && cp <= 0xfe0f) || (cp >= 0xe0100 && cp <= 0xe01ef)
+}
+
+const CHAR_NAMES: Record<number, string> = {
+  0x00ad: 'SOFT HYPHEN',
+  0x00a0: 'NO-BREAK SPACE',
+  0x1680: 'OGHAM SPACE MARK',
+  0x200b: 'ZERO WIDTH SPACE',
+  0x200c: 'ZERO WIDTH NON-JOINER',
+  0x200d: 'ZERO WIDTH JOINER',
+  0x200e: 'LEFT-TO-RIGHT MARK',
+  0x200f: 'RIGHT-TO-LEFT MARK',
+  0x202f: 'NARROW NO-BREAK SPACE',
+  0x205f: 'MEDIUM MATHEMATICAL SPACE',
+  0x2060: 'WORD JOINER',
+  0x3164: 'HANGUL FILLER',
+  0xfeff: 'ZERO WIDTH NO-BREAK SPACE (BOM)',
+}
+
+function charName(cp: number): string {
+  if (CHAR_NAMES[cp]) return CHAR_NAMES[cp]
+  if (cp >= 0x2000 && cp <= 0x200a) return 'NON-STANDARD SPACE'
+  if (cp >= 0x202a && cp <= 0x202e) return 'DIRECTIONAL FORMATTING MARK'
+  if (cp >= 0x2061 && cp <= 0x2064) return 'INVISIBLE OPERATOR'
+  if (cp >= 0x2066 && cp <= 0x2069) return 'DIRECTIONAL ISOLATE'
+  if (isVariationSelector(cp)) return 'VARIATION SELECTOR'
+  if (cp >= 0xe0000 && cp <= 0xe007f) return 'TAG CHARACTER (hidden-data / prompt-injection channel)'
+  return 'INVISIBLE CHARACTER'
+}
+
 /** Char-level mask: true = skip (inside code/quote/comment/link-url). Code,
  *  quotes, and URLs legitimately contain arrows, em-dashes, "robust" API
  *  names, and enumeration ellipses. */
@@ -148,11 +225,19 @@ function buildSkipMask(text: string): boolean[] {
   return mask
 }
 
+export interface LintExtras {
+  /** Replaces the built-in opener list (see resolveConfig). */
+  openers?: string[]
+  /** Site-specific rules, reported as `custom: <id>`. Skip mask honored. */
+  customRules?: { id: string; re: RegExp; suggestion?: string }[]
+}
+
 /** Lint any text (title, description, body) against the mechanical tells. */
 export function lint(
   text: string,
   rules: RuleSet = NEUTRAL,
-  banned: string[] = DEFAULT_BANNED_PHRASES
+  banned: string[] = DEFAULT_BANNED_PHRASES,
+  extras: LintExtras = {}
 ): Violation[] {
   if (!text) return []
   const violations: Violation[] = []
@@ -170,6 +255,11 @@ export function lint(
     if (mask[lineStarts[li] + col]) return
     violations.push({ line: li + 1, rule, excerpt: lines[li].trim().slice(0, 80), suggestion })
   }
+  // For rules where the skip mask must NOT apply: a hidden character inside a
+  // code block or quote is more suspicious, not less.
+  const pushAlways = (li: number, rule: string, suggestion: string) => {
+    violations.push({ line: li + 1, rule, excerpt: lines[li].trim().slice(0, 80), suggestion })
+  }
 
   lines.forEach((line, li) => {
     let m: RegExpExecArray | null
@@ -180,6 +270,32 @@ export function lint(
 
     const bubble = /💬.{0,60}(Question:|\?)/i
     if ((m = bubble.exec(line))) push(li, m.index, 'engagement-bait', 'Remove the speech-bubble-before-question. Reads as AI bait.')
+
+    // Invisible / nonstandard Unicode — zero-width characters, soft hyphens,
+    // directional marks, nonstandard spaces, variation selectors, and the tag
+    // block (U+E0000-E007F, a documented steganography and prompt-injection
+    // channel). Always on, and it IGNORES the skip mask. Carve-outs: ZWJ inside
+    // emoji sequences, ZWNJ/ZWJ adjacent to scripts where they are real
+    // orthography (Arabic, Persian, Indic), a single VS15/16 giving an emoji
+    // or keycap its presentation, and a byte-order mark at file position 0.
+    // What this canNOT see: statistical (token-sampling) watermarks — there is
+    // nothing on the page to match.
+    for (const inv of INVISIBLE_RE_MATCHES(line)) {
+      const cp = inv.cp
+      const abs = lineStarts[li] + inv.index
+      if (cp === 0xfeff && abs === 0) continue // legitimate file BOM
+      const prev = cpBefore(line, inv.index)
+      const next = cpAfter(line, inv.index + inv.length)
+      if (cp === 0x200d && (isEmojiish(prev) || isEmojiish(next) || isJoinerScript(prev) || isJoinerScript(next))) continue
+      if (cp === 0x200c && (isJoinerScript(prev) || isJoinerScript(next))) continue
+      if ((cp === 0xfe0e || cp === 0xfe0f) && !isVariationSelector(prev) && !isVariationSelector(next) && isEmojiish(prev)) continue
+      const run = isVariationSelector(cp) && (isVariationSelector(prev) || isVariationSelector(next))
+      pushAlways(
+        li,
+        'invisible-unicode',
+        `${charName(cp)} (U+${cp.toString(16).toUpperCase().padStart(4, '0')})${run ? ' in a variation-selector RUN — the shape of hidden encoded data' : ''}. Delete it or replace with the plain equivalent; these arrive via copy-paste, generation artifacts, or deliberate fingerprinting.`
+      )
+    }
 
     if (rules.emDash) {
       const emDash = /—/g
@@ -201,7 +317,7 @@ export function lint(
     }
 
     if (rules.bannedOpeners) {
-      for (const opener of BANNED_OPENERS) {
+      for (const opener of extras.openers ?? BANNED_OPENERS) {
         const re = new RegExp(`(^\\s*|\\.\\s+)(${escapeRegex(opener)})\\b`, 'i')
         if ((m = re.exec(line))) push(li, m.index + m[1].length, `banned opener: "${opener}"`, 'Overused AI opener. State the thing directly.')
       }
@@ -247,6 +363,10 @@ export function lint(
     for (const phrase of banned) {
       const re = new RegExp(`\\b${escapeRegex(phrase)}\\b`, 'i')
       if ((m = re.exec(line))) push(li, m.index, `banned phrase: "${phrase}"`, 'AI filler. Rephrase or cut.')
+    }
+
+    for (const cr of extras.customRules ?? []) {
+      if ((m = cr.re.exec(line))) push(li, m.index, `custom: ${cr.id}`, cr.suggestion ?? 'Site rule.')
     }
   })
 
@@ -326,6 +446,8 @@ export function demonstrativeHeadings(md: string): Violation[] {
   })
   return out
 }
+
+export * from './config.js'
 
 export function format(violations: Violation[]): string {
   return violations
