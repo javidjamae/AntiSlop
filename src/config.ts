@@ -28,6 +28,10 @@ export interface AntislopConfig {
   openers?: { add?: string[]; remove?: string[] }
   /** Site-specific regex rules. */
   customRules?: CustomRule[]
+  /** Site arrow conventions beyond the universal core exemptions
+   *  (breadcrumbs, pipelines, leading back-links are always exempt).
+   *  trailingCta: exempt a "→" ending a line or a link text. */
+  arrowExemptions?: { trailingCta?: boolean }
 }
 
 export interface CompiledCustomRule {
@@ -41,6 +45,7 @@ export interface ResolvedConfig {
   banned: string[]
   openers: string[]
   customRules: CompiledCustomRule[]
+  arrows: { trailingCta: boolean }
 }
 
 export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
@@ -70,5 +75,11 @@ export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
     suggestion: r.suggestion,
   }))
 
-  return { rules, banned, openers, customRules }
+  return {
+    rules,
+    banned,
+    openers,
+    customRules,
+    arrows: { trailingCta: cfg.arrowExemptions?.trailingCta ?? false },
+  }
 }

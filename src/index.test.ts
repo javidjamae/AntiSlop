@@ -105,6 +105,31 @@ test('config: array form replaces the phrase list wholesale', () => {
   assert.equal(lint('We delve into details.', rc.rules, rc.banned).length, 0)
 })
 
+
+test('contrast slop: comma form and "not just X, but Y"', () => {
+  assert.ok(rulesOf("It's not a tool problem, it's a standards problem.").includes('contrast-slop'))
+  assert.ok(rulesOf('The linter is not just a checker, but a teacher.').includes('contrast-slop'))
+  // Overlapping patterns report ONCE per span.
+  const hits = lint("It's not just a checker, but a teacher.", STRICT).filter((v) => v.rule === 'contrast-slop')
+  assert.equal(hits.length, 1)
+})
+
+test('arrows: breadcrumb, pipeline, and back-link are exempt; prose arrows still fire', () => {
+  assert.ok(!rulesOf('Go to Settings → Connections → Delete.').includes('arrow-symbol'))
+  assert.ok(!rulesOf('Input → Transform → Output').includes('arrow-symbol'))
+  assert.ok(!rulesOf('← All guides').includes('arrow-symbol'))
+  assert.ok(rulesOf('this leads → that').includes('arrow-symbol'))
+  assert.ok(rulesOf('more slop → worse writing').includes('arrow-symbol'))
+  assert.ok(rulesOf('do it 👉 now').includes('arrow-symbol'))
+})
+
+test('arrows: trailing-CTA exemption is config opt-in, off by default', () => {
+  const cta = 'Install from the App Store →'
+  assert.ok(lint(cta, STRICT).some((v) => v.rule === 'arrow-symbol'))
+  assert.ok(!lint(cta, STRICT, undefined, { arrows: { trailingCta: true } }).some((v) => v.rule === 'arrow-symbol'))
+  assert.ok(!lint('[Read the docs →](https://example.com)', STRICT, undefined, { arrows: { trailingCta: true } }).some((v) => v.rule === 'arrow-symbol'))
+})
+
 test('clean prose is clean', () => {
   assert.equal(lint('How to trim silence from a video', STRICT).length, 0)
 })

@@ -58,6 +58,7 @@ Drop an `antislop.config.json` at a repo's root and the CLI picks it up for any 
     "remove": ["robust"]
   },
   "openers": { "add": ["picture this"] },
+  "arrowExemptions": { "trailingCta": true },
   "customRules": [
     {
       "id": "no-passive-belief",
