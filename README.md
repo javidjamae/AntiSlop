@@ -69,7 +69,7 @@ Drop an `antislop.config.json` at a repo's root and the CLI picks it up for any 
 }
 ```
 
-`profile` sets the base, `rules` overrides per rule, and the phrase lists take either an `add`/`remove` object (edits the defaults) or a plain array (replaces them). `--strict` on the CLI overrides the config's profile; `--config=path` pins a config explicitly. The same shapes are available in the API through `resolveConfig()`.
+`rules` accepts either the camelCase key or the rule ID as printed in findings, so `"arrow-symbol": false` and `"arrows": false` are equivalent. An unrecognized name exits 2 with the list of valid ones rather than being ignored. `profile` sets the base, `rules` overrides per rule, and the phrase lists take either an `add`/`remove` object (edits the defaults) or a plain array (replaces them). `--strict` on the CLI overrides the config's profile; `--config=path` pins a config explicitly. The same shapes are available in the API through `resolveConfig()`.
 
 One scoping note: a linter is the enforcement half of a voice, the list of things that never ship. The generative half, what your writing should sound like, belongs in your style guide and your prompts. Keep the style guide next to the config, and encode into the config only what a regex can actually hold.
 
