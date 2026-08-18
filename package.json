@@ -1,6 +1,6 @@
 {
   "name": "antislop",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A deterministic linter for the mechanical tells of AI-generated prose.",
   "type": "module",
   "license": "MIT",
@@ -10,7 +10,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "default": "./dist/index.js"
     }
   },
   "bin": {

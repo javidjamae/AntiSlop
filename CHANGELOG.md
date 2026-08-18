@@ -6,6 +6,17 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.3.1 (2026-08-18)
+
+- Fix: the `exports` map declared only an `import` condition, so resolvers
+  that take the CJS path (bundlers, ts runners) failed with
+  ERR_PACKAGE_PATH_NOT_EXPORTED even though the package loads fine as ESM.
+  Now declares `default`.
+- Export `VERSION` from the package entrypoint so consumers can read the
+  linter version they are pinned to. It was reachable only from the CLI.
+
 - Fix: `arrow-symbol` no longer flags unrelated emoji. The rule's character
   class held the pointing-hand emoji without the `u` flag, so it matched
   either half of that astral character's surrogate pair, silently reporting

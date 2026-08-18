@@ -503,6 +503,7 @@ export function demonstrativeHeadings(md: string): Violation[] {
 }
 
 export * from './config.js'
+export { VERSION } from './version.js'
 
 export function format(violations: Violation[]): string {
   return violations
