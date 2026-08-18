@@ -17,10 +17,10 @@ This README passes its own strict lint. Run `antislop --strict README.md` to che
 
 ```bash
 # as a project dependency (pin a tag)
-pnpm add github:javidjamae/AntiSlop#v0.1.0
+pnpm add github:javidjamae/AntiSlop#v0.3.0
 
 # or run without installing
-npx github:javidjamae/AntiSlop file.md --strict
+npx github:javidjamae/AntiSlop#v0.3.0 file.md --strict
 ```
 
 ## CLI
