@@ -6,6 +6,10 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.3.1 (2026-08-18)
+
 - Fix: `arrow-symbol` no longer flags unrelated emoji. The rule's character
   class held the pointing-hand emoji without the `u` flag, so it matched
   either half of that astral character's surrogate pair, silently reporting
