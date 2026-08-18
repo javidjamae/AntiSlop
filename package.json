@@ -1,0 +1,32 @@
+{
+  "name": "antislop",
+  "version": "0.1.0",
+  "description": "A deterministic linter for the mechanical tells of AI-generated prose.",
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:javidjamae/AntiSlop",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "antislop": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "RULES.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/index.test.js",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^5.6.0"
+  }
+}
