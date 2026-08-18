@@ -230,6 +230,29 @@ export interface LintExtras {
   openers?: string[]
   /** Site-specific rules, reported as `custom: <id>`. Skip mask honored. */
   customRules?: { id: string; re: RegExp; suggestion?: string }[]
+  /** Site arrow conventions beyond the universal core exemptions.
+   *  trailingCta: a "→" ending a line or a link text (the external-link CTA
+   *  convention some sites use) stops being a finding. */
+  arrows?: { trailingCta?: boolean }
+}
+
+// Universal arrow exemptions (breadcrumb/pipeline, leading back-link) plus the
+// opt-in trailing-CTA convention. See the rules.arrows block for the rationale.
+const CAPISH = /^[`[("']*[A-Z0-9]/
+function arrowExempt(line: string, i: number, opts?: { trailingCta?: boolean }): boolean {
+  const ch = line[i]
+  if (ch === '←' && /^\s*(?:[-*+]\s+)?\[?\s*$/.test(line.slice(0, i))) return true // back-link
+  if (ch !== '→') return false
+  const before = line.slice(0, i).trimEnd()
+  const after = line.slice(i + 1).trimStart()
+  // Breadcrumb / pipeline: Capitalized (or digit/code) tokens on BOTH sides.
+  const left = before.split(/\s+/).pop() ?? ''
+  const right = after.split(/\s+/)[0] ?? ''
+  if (left && right && CAPISH.test(left) && CAPISH.test(right)) return true
+  // Trailing external-link CTA (per-site convention, config opt-in): the arrow
+  // ends the line, or ends the text of a markdown link.
+  if (opts?.trailingCta && /^(?:\]\([^)]*\))?\s*$/.test(after)) return true
+  return false
 }
 
 /** Lint any text (title, description, body) against the mechanical tells. */
@@ -307,9 +330,19 @@ export function lint(
       while ((m = ellipsis.exec(line))) push(li, m.index, 'ellipsis', 'Finish the thought or start a new sentence; dramatic ellipses read as AI.')
     }
 
+    // Arrows in narrative prose are a tell, but three uses are universal
+    // documentation conventions and exempt in core: breadcrumb/menu paths
+    // ("Settings → Connections → Delete"), pipeline notation
+    // ("Input → Transform → Output") — both detected as an arrow whose
+    // immediate left AND right words are Capitalized/digit/code tokens — and a
+    // leading "←" back-link. A trailing "→" external-link CTA is a per-site
+    // convention, so that one is opt-in via config (arrowExemptions.trailingCta).
     if (rules.arrows) {
       const arrow = /[→⇒←👉]/g
-      while ((m = arrow.exec(line))) push(li, m.index, 'arrow-symbol', 'Use "means," "leads to," "so," or restructure.')
+      while ((m = arrow.exec(line))) {
+        if (arrowExempt(line, m.index, extras.arrows)) continue
+        push(li, m.index, 'arrow-symbol', 'Use "means," "leads to," "so," or restructure.')
+      }
     }
 
     if (rules.hrDivider && line.trim() === '---') {
@@ -323,12 +356,28 @@ export function lint(
       }
     }
 
+    // Four shapes of the forward contrast flourish. The patterns overlap (the
+    // contraction form can also match "not just X, but Y"), so hits are
+    // deduped by span — one report per stretch of text.
     if (rules.contrastSlop) {
       const reassert = /(?:\b(?:is|are|was|were)\s+not\b|\b(?:is|are|was|were)n'?t\b|(?:'s|'re)\s+not\b)[^.;:!?]{0,60}[.;:!?]\s+(?:it|that|this|they)(?:\s+(?:is|are)|'s|'re)\b/i
       const consequence = /\b(?:is|are)\s+not\s+[^,.;]{1,30},\s+(?:and\s+)?(?:until|unless)\b/i
-      if ((m = reassert.exec(line)) || (m = consequence.exec(line))) {
-        push(li, m.index, 'contrast-slop', '"Not X, it\'s Y" flourish. State what it IS directly; one deliberate, concrete reclassification per piece at most.')
+      // The comma forms, mirrored from a production linter tuned on real copy: the
+      // 60-char cap and the no-sentence-punctuation middle keep a match inside
+      // one clause pair instead of running across the paragraph.
+      const commaForm = /\b(?:it'?s|its|this is|that'?s|we'?re|you'?re)\s+not\s+[^,;:.!?]{2,60},\s*(?:it'?s|its|this is|that'?s|we'?re|you'?re|but)\b/gi
+      const notJustBut = /\bnot\s+just\s+[^,;:.!?]{2,60},\s*but\b/gi
+
+      const spans: [number, number][] = []
+      const hit = (start: number, end: number) => {
+        if (spans.some(([s, e]) => start < e && end > s)) return
+        spans.push([start, end])
+        push(li, start, 'contrast-slop', '"Not X, it\'s Y" flourish. State what it IS directly; one deliberate, concrete reclassification per piece at most.')
       }
+      if ((m = reassert.exec(line))) hit(m.index, m.index + m[0].length)
+      if ((m = consequence.exec(line))) hit(m.index, m.index + m[0].length)
+      while ((m = commaForm.exec(line))) hit(m.index, m.index + m[0].length)
+      while ((m = notJustBut.exec(line))) hit(m.index, m.index + m[0].length)
     }
 
     if (rules.reversedAntithesis) {

@@ -62,7 +62,7 @@ function lintDocument(name: string, raw: string, rc: ResolvedConfig): FileReport
   const bodyOffset = fm ? fm[0].split('\n').length - 1 : 0
   const field = (k: string) => front.match(new RegExp(`^${k}:\\s*(.*)$`, 'm'))?.[1]?.trim() ?? ''
 
-  const extras = { openers: rc.openers, customRules: rc.customRules }
+  const extras = { openers: rc.openers, customRules: rc.customRules, arrows: rc.arrows }
   const violations: Violation[] = [
     ...lint(field('title'), rc.rules, rc.banned, extras).map((v) => ({ ...v, rule: `title: ${v.rule}` })),
     ...lint(field('description'), rc.rules, rc.banned, extras).map((v) => ({ ...v, rule: `description: ${v.rule}` })),

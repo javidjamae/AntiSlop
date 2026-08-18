@@ -9,11 +9,11 @@
 | `invisible-unicode` | Zero-width characters, soft hyphens, directional marks, nonstandard spaces, variation-selector runs, and the Unicode tag block (a documented steganography and prompt-injection channel) | always | always |
 | `em-dash` | Em-dashes in prose | off | on |
 | `ellipsis` | `…` or `...` for dramatic effect | off | on |
-| `arrow-symbol` | `→ ⇒ ← 👉` standing in for words | on | on |
+| `arrow-symbol` | `→ ⇒ ← 👉` standing in for words. Universal doc conventions are exempt: breadcrumb/menu paths and pipeline notation (Capitalized tokens on both sides of a `→`) and a leading `←` back-link. A trailing `→` link CTA is a per-site convention: opt in via `arrowExemptions.trailingCta` | on | on |
 | `horizontal-rule` | `---` as a section divider | off | on |
 | `banned opener: *` | `"Here's why"`, `"Let's dive in"`, `"In this article"`, at a sentence start | on | on |
 | `banned phrase: *` | AI filler vocabulary (`delve`, `testament to`, `seamless`, and friends) | on | on |
-| `contrast-slop` | Forward contrast flourish: negation immediately reasserted (`It's not luck. It's process.`) | off | on |
+| `contrast-slop` | Forward contrast flourish in four shapes: negation reasserted (`It's not luck. It's process.`), the comma form (`it's not X, it's Y`), `not just X, but Y`, and negation + dramatic consequence. Overlaps report once per span | off | on |
 | `reversed-antithesis` | Trailing `", not X"` / `", never X"` closing a clause | off | on |
 | `inline-header-bullet` | `- **Term:** sentence` bullet lists | off | on |
 | `emoji-decoration` | Emoji decorating headings or bullets (©/®/™ exempt) | on | on |
