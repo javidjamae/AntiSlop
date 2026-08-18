@@ -1,5 +1,12 @@
 # AntiSlop
 
+[![ci](https://github.com/javidjamae/AntiSlop/actions/workflows/ci.yml/badge.svg)](https://github.com/javidjamae/AntiSlop/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/tag/javidjamae/AntiSlop?label=release)](https://github.com/javidjamae/AntiSlop/tags)
+[![last commit](https://img.shields.io/github/last-commit/javidjamae/AntiSlop)](https://github.com/javidjamae/AntiSlop/commits/main)
+[![license](https://img.shields.io/github/license/javidjamae/AntiSlop)](LICENSE)
+![dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
+![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)
+
 A humanization linter that helps you prevent writing AI slop (or human slop, for that matter).
 
 AntiSlop checks prose for the mechanical tells of AI-generated writing: em-dash overuse, dramatic ellipses, arrow glyphs, "Let's dive in" openers, contrast flourishes, mechanical bolding, engagement bait, headings that point at nothing, and a curated list of AI filler vocabulary. It also catches hidden Unicode: zero-width characters, soft hyphens, directional marks, variation-selector runs, and the tag block used for steganography and invisible prompt injection. It is deterministic, dependency-free, and fast enough to run on every commit.

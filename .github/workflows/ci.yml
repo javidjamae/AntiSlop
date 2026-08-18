@@ -1,0 +1,31 @@
+name: ci
+
+# Runs the test suite (which builds first) on every push and pull request.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      # The linter's own docs must pass their own strict lint — the README
+      # promises it. A doc edit that introduces slop fails CI here.
+      - run: node dist/cli.js README.md RULES.md --strict
