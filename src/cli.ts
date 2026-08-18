@@ -52,7 +52,14 @@ function loadConfig(forDir: string): ResolvedConfig {
     }
   }
   if (strict) cfg = { ...cfg, profile: 'strict' }
-  return resolveConfig(cfg)
+  try {
+    return resolveConfig(cfg)
+  } catch (e) {
+    // A bad rule name is a config error, not a lint finding: exit 2 with the
+    // message, never a stack trace, and never a silently-ignored override.
+    console.error(`${(e as Error).message}${path ? `\n  in ${path}` : ''}`)
+    process.exit(2)
+  }
 }
 
 interface FileReport {
@@ -61,10 +68,10 @@ interface FileReport {
 }
 
 function lintDocument(name: string, raw: string, rc: ResolvedConfig): FileReport {
-  const fm = raw.match(/^---\n([\s\S]*?)\n---\n/)
-  const front = fm ? fm[1] : ''
-  const body = fm ? raw.slice(fm[0].length) : raw
-  const bodyOffset = fm ? fm[0].split('\n').length - 1 : 0
+  const frontmatterMatch = raw.match(/^---\n([\s\S]*?)\n---\n/)
+  const front = frontmatterMatch ? frontmatterMatch[1] : ''
+  const body = frontmatterMatch ? raw.slice(frontmatterMatch[0].length) : raw
+  const bodyOffset = frontmatterMatch ? frontmatterMatch[0].split('\n').length - 1 : 0
   const field = (k: string) => front.match(new RegExp(`^${k}:\\s*(.*)$`, 'm'))?.[1]?.trim() ?? ''
 
   const extras = { openers: rc.openers, customRules: rc.customRules, arrows: rc.arrows }

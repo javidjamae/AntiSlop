@@ -48,9 +48,67 @@ export interface ResolvedConfig {
   arrows: { trailingCta: boolean }
 }
 
+/**
+ * Kebab rule IDs (what findings print) -> camelCase RuleSet keys (what config
+ * takes). Several are NOT a mechanical conversion — `arrow-symbol` is `arrows`,
+ * `horizontal-rule` is `hrDivider`, `inline-header-bullet` is plural — so a
+ * reader cannot derive the key from CLI output. Both spellings are accepted.
+ */
+export const RULE_ID_TO_KEY: Record<string, keyof RuleSet> = {
+  'em-dash': 'emDash',
+  ellipsis: 'ellipsis',
+  'arrow-symbol': 'arrows',
+  'horizontal-rule': 'hrDivider',
+  'banned-opener': 'bannedOpeners',
+  'inline-header-bullet': 'inlineHeaderBullets',
+  'emoji-decoration': 'emojiDecor',
+  'bold-overuse': 'boldOveruse',
+  'contrast-slop': 'contrastSlop',
+  'reversed-antithesis': 'reversedAntithesis',
+  'heading-dependent-opener': 'headingDependentOpener',
+  'demonstrative-heading': 'demonstrativeHeading',
+}
+
+/** Rules with no toggle: they have no legitimate prose use and always run. */
+const ALWAYS_ON = new Set(['unicode-bold', 'engagement-bait', 'banned-phrase', 'invisible-unicode'])
+
+/**
+ * Resolve a `rules` override map, accepting either spelling.
+ *
+ * An unrecognized key THROWS rather than being ignored. Silently accepting one
+ * is the worst failure mode available here: the config looks applied, the exit
+ * code is unchanged, and a rule the author believes they turned off quietly
+ * stays on.
+ */
+function normalizeRuleOverrides(raw: Partial<RuleSet> | Record<string, boolean>): Partial<RuleSet> {
+  const out: Partial<RuleSet> = {}
+  const valid = new Set(Object.keys(NEUTRAL))
+  for (const [key, value] of Object.entries(raw)) {
+    if (valid.has(key)) {
+      out[key as keyof RuleSet] = value as boolean
+      continue
+    }
+    const aliased = RULE_ID_TO_KEY[key]
+    if (aliased) {
+      out[aliased] = value as boolean
+      continue
+    }
+    if (ALWAYS_ON.has(key)) {
+      throw new Error(
+        `antislop config: "${key}" is always on and cannot be toggled (it has no legitimate prose use).`
+      )
+    }
+    throw new Error(
+      `antislop config: unknown rule "${key}". Valid keys: ${Object.keys(NEUTRAL).sort().join(', ')}. ` +
+        `Rule IDs as printed in findings also work (e.g. "reversed-antithesis" for "reversedAntithesis").`
+    )
+  }
+  return out
+}
+
 export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
   const base = cfg.profile === 'strict' ? STRICT : NEUTRAL
-  const rules: RuleSet = { ...base, ...(cfg.rules ?? {}) }
+  const rules: RuleSet = { ...base, ...normalizeRuleOverrides(cfg.rules ?? {}) }
 
   let banned: string[]
   if (Array.isArray(cfg.bannedPhrases)) {

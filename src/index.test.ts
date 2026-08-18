@@ -181,6 +181,35 @@ test('VERSION is exported from the package entrypoint (consumers read it)', () =
   assert.match(VERSION, /^\d+\.\d+\.\d+$/)
 })
 
+test('config: an unknown rule key THROWS instead of silently no-opping', () => {
+  // The original defect: { ...base, ...cfg.rules } absorbed a kebab id as a
+  // junk property while the real camelCase key kept its profile value, so the
+  // config looked applied, the exit code was unchanged, and the rule stayed on.
+  assert.throws(() => resolveConfig({ rules: { reversedAntithesisX: false } as never }), /unknown rule/)
+  assert.throws(() => resolveConfig({ rules: { 'em_dash': false } as never }), /unknown rule/)
+})
+
+test('config: kebab rule IDs work as aliases for camelCase keys', () => {
+  // Findings print kebab ids, so a config written from CLI output must work.
+  // Several are not mechanical conversions, which is why aliasing beats docs.
+  const line = 'It is a plain sentence, not a fancy one.'
+  assert.equal(lint(line, resolveConfig({ profile: 'strict' }).rules).filter((v) => v.rule === 'reversed-antithesis').length, 1)
+  for (const key of ['reversed-antithesis', 'reversedAntithesis']) {
+    const rc = resolveConfig({ profile: 'strict', rules: { [key]: false } as never })
+    assert.equal(lint(line, rc.rules).filter((v) => v.rule === 'reversed-antithesis').length, 0, key)
+  }
+  // The non-mechanical ones specifically.
+  assert.equal(resolveConfig({ rules: { 'arrow-symbol': false } as never }).rules.arrows, false)
+  assert.equal(resolveConfig({ rules: { 'horizontal-rule': true } as never }).rules.hrDivider, true)
+  assert.equal(resolveConfig({ rules: { 'emoji-decoration': false } as never }).rules.emojiDecor, false)
+  assert.equal(resolveConfig({ rules: { 'inline-header-bullet': true } as never }).rules.inlineHeaderBullets, true)
+})
+
+test('config: an always-on rule reports why it cannot be toggled', () => {
+  assert.throws(() => resolveConfig({ rules: { 'unicode-bold': false } as never }), /always on/)
+  assert.throws(() => resolveConfig({ rules: { 'invisible-unicode': false } as never }), /always on/)
+})
+
 test('clean prose is clean', () => {
   assert.equal(lint('How to trim silence from a video', STRICT).length, 0)
 })

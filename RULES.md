@@ -2,24 +2,24 @@
 
 ## Implemented (deterministic tier)
 
-| Rule ID | Fires on | NEUTRAL | STRICT |
-|---|---|---|---|
-| `unicode-bold` | Bold faked with unicode math characters | always | always |
-| `engagement-bait` | Speech-bubble emoji leading into a question | always | always |
-| `invisible-unicode` | Zero-width characters, soft hyphens, directional marks, nonstandard spaces, variation-selector runs, and the Unicode tag block (a documented steganography and prompt-injection channel) | always | always |
-| `em-dash` | Em-dashes in prose | off | on |
-| `ellipsis` | `…` or `...` for dramatic effect | off | on |
-| `arrow-symbol` | `→ ⇒ ← 👉` standing in for words. Universal doc conventions are exempt: breadcrumb/menu paths and pipeline notation (Capitalized tokens on both sides of a `→`) and a leading `←` back-link. A trailing `→` link CTA is a per-site convention: opt in via `arrowExemptions.trailingCta` | on | on |
-| `horizontal-rule` | `---` as a section divider | off | on |
-| `banned opener: *` | `"Here's why"`, `"Let's dive in"`, `"In this article"`, at a sentence start | on | on |
-| `banned phrase: *` | AI filler vocabulary (`delve`, `testament to`, `seamless`, and friends) | on | on |
-| `contrast-slop` | Forward contrast flourish in four shapes: negation reasserted (`It's not luck. It's process.`), the comma form (`it's not X, it's Y`), `not just X, but Y`, and negation + dramatic consequence. Overlaps report once per span | off | on |
-| `reversed-antithesis` | Trailing `", not X"` / `", never X"` closing a clause | off | on |
-| `inline-header-bullet` | `- **Term:** sentence` bullet lists | off | on |
-| `emoji-decoration` | Emoji decorating headings or bullets (©/®/™ exempt) | on | on |
-| `bold-overuse` | 3+ bold spans in one paragraph (table rows exempt) | on | on |
-| `heading-dependent-opener` | A section's first sentence opening on a bare referring word whose antecedent is the heading | on | on |
-| `demonstrative-heading` | Non-question H2/H3 ending on a bare "it"/"this"/"that" | on | on |
+| Rule ID | Config key | Fires on | NEUTRAL | STRICT |
+|---|---|---|---|---|
+| `unicode-bold` | always on | Bold faked with unicode math characters | always | always |
+| `engagement-bait` | always on | Speech-bubble emoji leading into a question | always | always |
+| `invisible-unicode` | always on | Zero-width characters, soft hyphens, directional marks, nonstandard spaces, variation-selector runs, and the Unicode tag block (a documented steganography and prompt-injection channel) | always | always |
+| `em-dash` | `emDash` | Em-dashes in prose | off | on |
+| `ellipsis` | `ellipsis` | `…` or `...` for dramatic effect | off | on |
+| `arrow-symbol` | `arrows` | `→ ⇒ ←` standing in for words (emoji belong to `emoji-decoration`). Universal doc conventions are exempt: breadcrumb/menu paths and pipeline notation (Capitalized tokens on both sides of a `→`) and a leading `←` back-link. A trailing `→` link CTA is a per-site convention: opt in via `arrowExemptions.trailingCta` | on | on |
+| `horizontal-rule` | `hrDivider` | `---` as a section divider | off | on |
+| `banned opener: *` | `bannedOpeners` | `"Here's why"`, `"Let's dive in"`, `"In this article"`, at a sentence start | on | on |
+| `banned phrase: *` | always on | AI filler vocabulary (`delve`, `testament to`, `seamless`, and friends) | on | on |
+| `contrast-slop` | `contrastSlop` | Forward contrast flourish in four shapes: negation reasserted (`It's not luck. It's process.`), the comma form (`it's not X, it's Y`), `not just X, but Y`, and negation + dramatic consequence. Overlaps report once per span | off | on |
+| `reversed-antithesis` | `reversedAntithesis` | Trailing `", not X"` / `", never X"` closing a clause | off | on |
+| `inline-header-bullet` | `inlineHeaderBullets` | `- **Term:** sentence` bullet lists | off | on |
+| `emoji-decoration` | `emojiDecor` | Emoji decorating headings or bullets (©/®/™ exempt) | on | on |
+| `bold-overuse` | `boldOveruse` | 3+ bold spans in one paragraph (table rows exempt) | on | on |
+| `heading-dependent-opener` | `headingDependentOpener` | A section's first sentence opening on a bare referring word whose antecedent is the heading | on | on |
+| `demonstrative-heading` | `demonstrativeHeading` | Non-question H2/H3 ending on a bare "it"/"this"/"that" | on | on |
 
 Precision notes, from sweeping the rules over a real published corpus before
 they shipped anywhere:
@@ -41,6 +41,15 @@ they shipped anywhere:
   VS15/16 giving an emoji or keycap its presentation, ZWNJ/ZWJ adjacent to
   scripts where they are real orthography (Arabic, Persian, Indic), and a
   byte-order mark at file position 0.
+
+## Configuring a rule
+
+The **Config key** column is what `antislop.config.json` takes in its `rules`
+map. Several keys are not a mechanical conversion of the rule ID, so the linter
+also accepts the rule ID itself as an alias: `"arrow-symbol": false` and
+`"arrows": false` both work. An unrecognized name exits 2 with the list of
+valid names rather than being silently ignored, because a config that looks
+applied while doing nothing is the worst outcome available here.
 
 ## What this cannot detect, stated plainly
 

@@ -6,7 +6,14 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
-_Nothing yet._
+- Fix: an unrecognized key in the config's `rules` map was silently ignored, so
+  a config written from the printed rule IDs (`reversed-antithesis` rather than
+  `reversedAntithesis`) looked applied, changed no exit code, and left the rule
+  on. Rule IDs are now accepted as aliases for their config keys, and a name
+  that is neither exits 2 listing the valid ones. Several keys are not a
+  mechanical conversion of their ID (`arrow-symbol` is `arrows`,
+  `horizontal-rule` is `hrDivider`), so RULES.md now carries a config-key
+  column beside each rule ID.
 
 ## 0.3.1 (2026-08-18)
 
