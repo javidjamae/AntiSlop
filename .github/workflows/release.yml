@@ -1,0 +1,105 @@
+name: release
+
+# Builds the package and attaches the tarball to a GitHub Release.
+#
+# Consumers who cannot run install scripts install that tarball rather than
+# this git repository. The difference matters: a git dependency is compiled at
+# install time by a `prepare` script, which needs TypeScript, which is a
+# devDependency — so `npm ci --omit=dev` and `--ignore-scripts` installs fail
+# with the package half-installed. A tarball has dist/ in it already and needs
+# no build step, so it installs anywhere.
+#
+# Nothing is published to the npm registry. `npm pack` is used only as a local
+# packaging command, because it honours the `files` field and produces the
+# standard package/ layout that npm, pnpm and yarn expect.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # Allows re-running against an existing tag if a release needs rebuilding.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build a release for (e.g. v0.3.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Verify the build actually produced dist/
+        run: |
+          test -f dist/index.js || { echo "dist/index.js missing after build"; exit 1; }
+          test -f dist/cli.js || { echo "dist/cli.js missing after build"; exit 1; }
+
+      - name: Lint the docs with the built CLI
+        run: node dist/cli.js README.md RULES.md CHANGELOG.md --strict
+
+      - name: Pack
+        id: pack
+        run: |
+          FILE=$(npm pack --silent)
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          echo "Packed $FILE"
+
+      - name: Verify the tarball contains the build
+        run: |
+          tar -tzf "${{ steps.pack.outputs.file }}" | grep -q '^package/dist/index.js$' \
+            || { echo "tarball has no dist/ — consumers would fail at import"; exit 1; }
+          tar -tzf "${{ steps.pack.outputs.file }}" | grep -q '^package/dist/cli.js$' \
+            || { echo "tarball has no CLI — npx installs would fail"; exit 1; }
+          echo "tarball contents:"
+          tar -tzf "${{ steps.pack.outputs.file }}" | head -30
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          ASSET: ${{ steps.pack.outputs.file }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Notes are built into a file rather than passed inline: a multi-line
+          # --notes argument has to stay inside this block scalar's indentation,
+          # and getting that wrong breaks the whole workflow file rather than
+          # just this step.
+          {
+            echo "Install this release:"
+            echo
+            echo '```jsonc'
+            echo "\"antislop\": \"https://github.com/$REPO/releases/download/$TAG/$ASSET\""
+            echo '```'
+            echo
+            echo "Or pin the tag directly (requires install scripts enabled):"
+            echo
+            echo '```jsonc'
+            echo "\"antislop\": \"github:$REPO#$TAG\""
+            echo '```'
+            echo
+            echo "See CHANGELOG.md for what changed."
+          } > release-notes.md
+
+          # Idempotent: create the release if this is a fresh tag, otherwise
+          # replace the asset on the existing one so a rebuild is not blocked.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ASSET" --clobber
+          else
+            gh release create "$TAG" "$ASSET" --title "$TAG" --notes-file release-notes.md
+          fi
