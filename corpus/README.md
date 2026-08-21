@@ -90,9 +90,23 @@ pin yields the same sample on every machine.
 
 ## Reading the report
 
-`REPORT.md` and `report.json` are written locally and published by the
-`corpus` workflow: on every release (attached to the release as an asset),
-monthly, and on demand.
+`REPORT.md` and `report.json` are written locally. The `corpus` workflow runs
+on every tag push, monthly, and on demand, and publishes to four places:
+
+| Where | What it is good for |
+|---|---|
+| [javidjamae.github.io/AntiSlop](https://javidjamae.github.io/AntiSlop/) | A citable URL for the current numbers, rendered from `report.html` |
+| `corpus/REPORT.md` in this repo | The copy GitHub renders inline, and the one RULES.md cites |
+| Release assets | The measurement as it stood at a given version |
+| Workflow artifact | 90 days, including the raw `report.json` |
+
+The monthly run opens a **draft PR** refreshing the committed report rather
+than pushing to `main`. That matters because the in-repo copy is the one people
+read: without it, the cron produced a number that expired into an artifact
+while the published report drifted quietly out of date. The report carries a
+generation date, so every run yields a diff, which makes an arriving PR the
+evidence that the harness ran. Silence would otherwise be ambiguous between
+"nothing changed" and "the job has been broken since March".
 
 The workflow never fails on a rate change. A threshold would convert a
 judgment call into a merge blocker without improving the judgment. The report
