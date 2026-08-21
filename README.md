@@ -6,12 +6,15 @@
 [![license](https://img.shields.io/github/license/javidjamae/AntiSlop)](LICENSE)
 ![dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)
+[![corpus report](https://img.shields.io/badge/corpus%20report-measured-blue)](https://javidjamae.github.io/AntiSlop/)
 
 A humanization linter that helps you prevent writing AI slop (or human slop, for that matter).
 
 AntiSlop checks prose for the mechanical tells of AI-generated writing: em-dash overuse, dramatic ellipses, arrow glyphs, "Let's dive in" openers, contrast flourishes, mechanical bolding, engagement bait, headings that point at nothing, and a curated list of AI filler vocabulary. It also catches hidden Unicode: zero-width characters, soft hyphens, directional marks, variation-selector runs, and the tag block, which together form the character-level channel used to watermark text, fingerprint a copy back to its recipient, and smuggle invisible prompt injections. It is deterministic, dependency-free, and fast enough to run on every commit.
 
 This README passes its own strict lint. Run `antislop --strict README.md` to check.
+
+Every rule ships with a measured false-positive rate against 101,000 lines of human prose written before the generated web, and a detection rate against generated prose paired with it. The current numbers are at **[javidjamae.github.io/AntiSlop](https://javidjamae.github.io/AntiSlop/)**, reproducible with `npm run corpus`.
 
 ## Install
 
@@ -128,6 +131,19 @@ Exemptions are context-aware. Code blocks, inline code, blockquotes, and link UR
 ## What this deliberately does not do
 
 Only high-precision, mechanically detectable tells live here. Patterns that need a judgment call in context stay out of scope, because a regex that guesses at them trains writers to ignore the linter. See [RULES.md](RULES.md) for the full list of implemented rules and the explicit list of unmechanizable ones.
+
+## Every rule ships with a number
+
+Precision claims are cheap, so every rule carries a number. `npm run corpus` fetches five human sources pinned to revisions predating the generated web, plus generated text paired with a human treatment of the same prompt, and reports how often each rule fires on each side.
+
+| | |
+|---|--:|
+| Human prose measured | 101,000 lines |
+| Generated documents flagged, NEUTRAL | 35.0% |
+| Human documents flagged, NEUTRAL | 7.6% |
+| Highest rate of any default-on rule, per 1,000 lines of target prose | 0.21 |
+
+Corpus content is fetched at run time and never committed. Method, sources, and the sources evaluated and rejected are in [corpus/README.md](corpus/README.md); the current report is at [javidjamae.github.io/AntiSlop](https://javidjamae.github.io/AntiSlop/) and refreshed monthly.
 
 ## Attribution
 
