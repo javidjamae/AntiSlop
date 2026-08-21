@@ -294,21 +294,32 @@ test('reveal-shape reports once per line when families overlap', () => {
   assert.equal(v.filter((x) => x.rule === 'reveal-shape').length, 1)
 })
 
-test('contrast-slop covers do/modal negations and past-copula reassertion', () => {
+test('contrast-slop covers modal negations and past-copula reassertion', () => {
   // Regression: the negation side accepted only is/are/was/were, and the
   // reassertion side only a present copula, so these slipped through.
   assert.ok(rulesOf("The migration wasn't a rewrite. It was a rename.").includes('contrast-slop'))
-  assert.ok(rulesOf("Retries don't help here. They're the amplifier.").includes('contrast-slop'))
-  assert.ok(rulesOf("The job doesn't retry. It's dropped.").includes('contrast-slop'))
   assert.ok(rulesOf("You can't tune this. It's a hard limit.").includes('contrast-slop'))
   assert.ok(rulesOf('The scheduler cannot preempt. It is cooperative.').includes('contrast-slop'))
+  assert.ok(rulesOf("These aren't warnings. They are errors.").includes('contrast-slop'))
 })
 
-test('contrast-slop stops at a bare lexical-verb follow-up (deliberate recall limit)', () => {
-  // "The cache doesn't expire. It leaks." is the reassertion SHAPE, but
-  // matching any verb after the pronoun swallows ordinary two-sentence
-  // technical prose. Precision wins; RULES.md states the limit.
+test('contrast-slop: boundaries the corpus paid for', () => {
+  // Each assertion below is a measured decision, not a guess. Numbers and
+  // sample hits live in corpus/REPORT.md.
+
+  // (1) A lexical-auxiliary negation negates an ACTION, and what follows is a
+  // new statement rather than a reassertion. Allowing it tripled the rate on
+  // human technical prose, so `do/does/did/has/have/had` stay off the left.
+  assert.ok(!rulesOf('For most volume types, you do not need to set this field. It is automatic.').includes('contrast-slop'))
+  assert.ok(!rulesOf("Kubernetes doesn't prevent you from managing Pods directly. It is possible.").includes('contrast-slop'))
   assert.ok(!rulesOf("The cache doesn't expire. It leaks.").includes('contrast-slop'))
+
+  // (2) A semicolon is not a sentence end. `; that is,` is a discourse
+  // marker, and the old boundary class read it as a reassertion.
+  assert.ok(!rulesOf("`<main>` doesn't contribute to the outline; that is, unlike other elements.").includes('contrast-slop'))
+
+  // (3) A bare lexical verb after the pronoun is the reassertion SHAPE, but
+  // matching any verb there swallows ordinary two-sentence prose.
   assert.ok(!rulesOf("Retries don't help. They amplify the outage.").includes('contrast-slop'))
 })
 

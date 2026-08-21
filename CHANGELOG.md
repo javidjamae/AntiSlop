@@ -5,6 +5,29 @@ the Unreleased section, syncs `package.json` and `src/version.ts`, and tags,
 all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
+- Fix (corpus harness): the ghostbuster fetcher recursed for `.txt` and pulled
+  that repo's `logprobs/` subdirectories, which hold token and float pairs
+  rather than prose. They took 33 to 40 of every 50 sampled slots in the essay
+  and creative-writing sets, and the linter measured them as English. Excluded
+  by pattern, with a prose guard in the cache writer as the backstop for the
+  next source that hides something similar. Correcting it RAISED the measured
+  separation from 18.5 to 27.4 points, because the dumps had been inflating the
+  line count while contributing no findings.
+
+- Fix (corpus harness): several ways the report could overstate its own
+  coverage. A missing `corpus.lock.json` dropped every paired source and still
+  exited 0, publishing a detection headline of `0.0% | 0.0% | 0.0 points`; it
+  now exits 2. The cache was never pruned, so a lowered sample size or a
+  renamed source left stale files to be counted by the next run. The lift
+  column rendered "fires only on human text" identically to "never fired",
+  which is what let a reveal-shape false-positive bug read as inert. Retries
+  burned the full backoff ladder on 404s that could never succeed. Paged
+  fetches could skip rows they never requested. And the generated prose
+  hardcoded which rules scored below 1, in a report whose numbers are
+  recomputed monthly.
+- `npm run corpus:fetch` builds first; it imported `dist/` at module scope and
+  died on a clean tree.
+
 - Fix: `reveal-shape` fired on ordinary English. The subject family accepted a
   bare `people`/`they` and the verb family accepted a bare `says`/`knows`, so
   `the audit records what people say about the outage` was a finding, on a
@@ -23,6 +46,21 @@ all from one commit. The tag is the version consumers pin.
   `unleash the power of`, so six words produced two findings. Longest entry
   wins the span, once.
 
+
+- New corpus harness (`npm run corpus`). Measures how often each rule fires on
+  95,000 lines of human prose pinned to revisions predating the generated web,
+  and writes `corpus/REPORT.md`. RULES.md previously claimed its rules had been
+  swept over "a real published corpus" with no corpus in the repo; that claim
+  is now a reproducible command and a table of measured rates. Corpus content
+  is fetched at run time and stays out of the repo. A CI workflow publishes
+  the report on every release. Report only, with no threshold: a gate would turn a judgment call
+  into a merge blocker without improving the judgment.
+- Fix: `contrast-slop` counted a semicolon as a sentence end, so the discourse
+  marker `; that is,` read as a reassertion. The boundary is now
+  sentence-final punctuation.
+- The corpus caught the `contrast-slop` widening below over-firing on human
+  technical prose, and the negation side was pulled back before release. See
+  RULES.md.
 
 - New rule `reveal-shape` (`revealShape`, on in NEUTRAL): the tease framing
   that withholds its point and sells the withholding, and casts the reader as

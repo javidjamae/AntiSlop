@@ -1,0 +1,537 @@
+{
+  "cutoff": "2021-12-31T00:00:00Z",
+  "totalLines": 110596,
+  "units": [
+    {
+      "dir": "rust-book",
+      "role": "target",
+      "label": "rust-book",
+      "files": 50,
+      "lines": 11413,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 16,
+          "banned opener": 8,
+          "heading-dependent-opener": 3
+        },
+        "STRICT": {
+          "banned phrase": 16,
+          "em-dash": 18,
+          "reversed-antithesis": 12,
+          "banned opener": 8,
+          "contrast-slop": 2,
+          "inline-header-bullet": 6,
+          "heading-dependent-opener": 3,
+          "ellipsis": 1
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 19,
+        "STRICT": 30
+      },
+      "sourceId": "rust-book"
+    },
+    {
+      "dir": "k8s-concepts",
+      "role": "target",
+      "label": "k8s-concepts",
+      "files": 54,
+      "lines": 13615,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 4,
+          "invisible-unicode": 6,
+          "heading-dependent-opener": 3,
+          "arrow-symbol": 4
+        },
+        "STRICT": {
+          "em-dash": 9,
+          "inline-header-bullet": 8,
+          "banned phrase": 4,
+          "contrast-slop": 3,
+          "invisible-unicode": 6,
+          "reversed-antithesis": 11,
+          "heading-dependent-opener": 3,
+          "arrow-symbol": 4,
+          "ellipsis": 1
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 9,
+        "STRICT": 22
+      },
+      "sourceId": "k8s-concepts"
+    },
+    {
+      "dir": "mdn-guides",
+      "role": "target",
+      "label": "mdn-guides",
+      "files": 59,
+      "lines": 8148,
+      "counts": {
+        "NEUTRAL": {
+          "invisible-unicode": 120,
+          "bold-overuse": 2,
+          "heading-dependent-opener": 2,
+          "banned opener": 1,
+          "demonstrative-heading": 1
+        },
+        "STRICT": {
+          "em-dash": 37,
+          "invisible-unicode": 120,
+          "ellipsis": 16,
+          "reversed-antithesis": 3,
+          "bold-overuse": 2,
+          "heading-dependent-opener": 2,
+          "contrast-slop": 2,
+          "banned opener": 1,
+          "demonstrative-heading": 1
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 20,
+        "STRICT": 27
+      },
+      "sourceId": "mdn-guides"
+    },
+    {
+      "dir": "wikipedia",
+      "role": "target",
+      "label": "wikipedia",
+      "files": 30,
+      "lines": 9463,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 15,
+          "emoji-decoration": 1,
+          "invisible-unicode": 2,
+          "arrow-symbol": 5
+        },
+        "STRICT": {
+          "em-dash": 111,
+          "reversed-antithesis": 26,
+          "banned phrase": 15,
+          "emoji-decoration": 1,
+          "ellipsis": 44,
+          "contrast-slop": 8,
+          "invisible-unicode": 2,
+          "arrow-symbol": 5
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 15,
+        "STRICT": 26
+      },
+      "sourceId": "wikipedia"
+    },
+    {
+      "dir": "gutenberg",
+      "role": "control",
+      "label": "gutenberg",
+      "files": 5,
+      "lines": 58771,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 30,
+          "invisible-unicode": 2
+        },
+        "STRICT": {
+          "banned phrase": 30,
+          "reversed-antithesis": 163,
+          "contrast-slop": 24,
+          "em-dash": 2226,
+          "ellipsis": 51,
+          "invisible-unicode": 2
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 5,
+        "STRICT": 5
+      },
+      "sourceId": "gutenberg"
+    },
+    {
+      "dir": "gpt-wiki-intro-human",
+      "role": "paired-human",
+      "label": "gpt-wiki-intro (human)",
+      "files": 150,
+      "lines": 339,
+      "counts": {
+        "NEUTRAL": {
+          "invisible-unicode": 22,
+          "banned phrase": 3
+        },
+        "STRICT": {
+          "em-dash": 5,
+          "invisible-unicode": 22,
+          "banned phrase": 3,
+          "reversed-antithesis": 3,
+          "contrast-slop": 1
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 15,
+        "STRICT": 21
+      },
+      "sourceId": "gpt-wiki-intro"
+    },
+    {
+      "dir": "gpt-wiki-intro-machine",
+      "role": "slop",
+      "label": "gpt-wiki-intro (machine)",
+      "files": 150,
+      "lines": 783,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 3,
+          "invisible-unicode": 1
+        },
+        "STRICT": {
+          "ellipsis": 1,
+          "contrast-slop": 2,
+          "banned phrase": 3,
+          "invisible-unicode": 1
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 3,
+        "STRICT": 5
+      },
+      "sourceId": "gpt-wiki-intro"
+    },
+    {
+      "dir": "hc3-eli5-human",
+      "role": "paired-human",
+      "label": "hc3-eli5 (human)",
+      "files": 150,
+      "lines": 150,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 3
+        },
+        "STRICT": {
+          "ellipsis": 14,
+          "banned phrase": 3,
+          "em-dash": 5,
+          "reversed-antithesis": 3
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 3,
+        "STRICT": 20
+      },
+      "sourceId": "hc3-eli5"
+    },
+    {
+      "dir": "hc3-eli5-machine",
+      "role": "slop",
+      "label": "hc3-eli5 (machine)",
+      "files": 150,
+      "lines": 556,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 34,
+          "banned opener": 1
+        },
+        "STRICT": {
+          "banned phrase": 34,
+          "contrast-slop": 11,
+          "banned opener": 1,
+          "ellipsis": 1
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 30,
+        "STRICT": 38
+      },
+      "sourceId": "hc3-eli5"
+    },
+    {
+      "dir": "ghostbuster-essay-human",
+      "role": "paired-human",
+      "label": "essay/human",
+      "pair": "essay",
+      "files": 49,
+      "lines": 338,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 12
+        },
+        "STRICT": {
+          "banned phrase": 12,
+          "ellipsis": 2,
+          "reversed-antithesis": 6
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 11,
+        "STRICT": 15
+      },
+      "sourceId": "ghostbuster"
+    },
+    {
+      "dir": "ghostbuster-essay-gpt",
+      "role": "slop",
+      "label": "essay/gpt",
+      "pair": "essay",
+      "files": 50,
+      "lines": 556,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 95
+        },
+        "STRICT": {
+          "banned phrase": 95,
+          "reversed-antithesis": 2,
+          "contrast-slop": 4
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 45,
+        "STRICT": 46
+      },
+      "sourceId": "ghostbuster"
+    },
+    {
+      "dir": "ghostbuster-essay-claude",
+      "role": "slop",
+      "label": "essay/claude",
+      "pair": "essay",
+      "files": 50,
+      "lines": 560,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 36
+        },
+        "STRICT": {
+          "banned phrase": 36,
+          "reversed-antithesis": 4,
+          "em-dash": 9,
+          "ellipsis": 3
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 28,
+        "STRICT": 31
+      },
+      "sourceId": "ghostbuster"
+    },
+    {
+      "dir": "ghostbuster-essay-gpt_prompt1",
+      "role": "slop",
+      "label": "essay/gpt_prompt1",
+      "pair": "essay",
+      "files": 49,
+      "lines": 722,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 76
+        },
+        "STRICT": {
+          "banned phrase": 76,
+          "contrast-slop": 1
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 38,
+        "STRICT": 38
+      },
+      "sourceId": "ghostbuster"
+    },
+    {
+      "dir": "ghostbuster-reuter-human",
+      "role": "paired-human",
+      "label": "reuter/human",
+      "pair": "reuter",
+      "files": 50,
+      "lines": 870,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 1
+        },
+        "STRICT": {
+          "reversed-antithesis": 2,
+          "ellipsis": 19,
+          "banned phrase": 1,
+          "contrast-slop": 1
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 1,
+        "STRICT": 15
+      },
+      "sourceId": "ghostbuster"
+    },
+    {
+      "dir": "ghostbuster-reuter-gpt",
+      "role": "slop",
+      "label": "reuter/gpt",
+      "pair": "reuter",
+      "files": 50,
+      "lines": 513,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 25
+        },
+        "STRICT": {
+          "banned phrase": 25,
+          "contrast-slop": 2
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 16,
+        "STRICT": 17
+      },
+      "sourceId": "ghostbuster"
+    },
+    {
+      "dir": "ghostbuster-reuter-claude",
+      "role": "slop",
+      "label": "reuter/claude",
+      "pair": "reuter",
+      "files": 50,
+      "lines": 658,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 7
+        },
+        "STRICT": {
+          "banned phrase": 7,
+          "em-dash": 15,
+          "ellipsis": 2,
+          "reversed-antithesis": 1
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 7,
+        "STRICT": 17
+      },
+      "sourceId": "ghostbuster"
+    },
+    {
+      "dir": "ghostbuster-reuter-gpt_prompt1",
+      "role": "slop",
+      "label": "reuter/gpt_prompt1",
+      "pair": "reuter",
+      "files": 50,
+      "lines": 506,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 94,
+          "banned opener": 2
+        },
+        "STRICT": {
+          "banned phrase": 94,
+          "banned opener": 2,
+          "reversed-antithesis": 1,
+          "em-dash": 1
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 42,
+        "STRICT": 43
+      },
+      "sourceId": "ghostbuster"
+    },
+    {
+      "dir": "ghostbuster-wp-human",
+      "role": "paired-human",
+      "label": "wp/human",
+      "pair": "wp",
+      "files": 49,
+      "lines": 656,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 4
+        },
+        "STRICT": {
+          "ellipsis": 47,
+          "em-dash": 7,
+          "contrast-slop": 4,
+          "banned phrase": 4,
+          "reversed-antithesis": 4
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 4,
+        "STRICT": 31
+      },
+      "sourceId": "ghostbuster"
+    },
+    {
+      "dir": "ghostbuster-wp-gpt",
+      "role": "slop",
+      "label": "wp/gpt",
+      "pair": "wp",
+      "files": 50,
+      "lines": 509,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 38
+        },
+        "STRICT": {
+          "banned phrase": 38,
+          "ellipsis": 2,
+          "em-dash": 18,
+          "reversed-antithesis": 12,
+          "contrast-slop": 1
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 20,
+        "STRICT": 30
+      },
+      "sourceId": "ghostbuster"
+    },
+    {
+      "dir": "ghostbuster-wp-claude",
+      "role": "slop",
+      "label": "wp/claude",
+      "pair": "wp",
+      "files": 50,
+      "lines": 913,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 2
+        },
+        "STRICT": {
+          "ellipsis": 13,
+          "banned phrase": 2,
+          "reversed-antithesis": 7,
+          "em-dash": 19,
+          "contrast-slop": 3
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 2,
+        "STRICT": 22
+      },
+      "sourceId": "ghostbuster"
+    },
+    {
+      "dir": "ghostbuster-wp-gpt_prompt1",
+      "role": "slop",
+      "label": "wp/gpt_prompt1",
+      "pair": "wp",
+      "files": 50,
+      "lines": 557,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 51
+        },
+        "STRICT": {
+          "banned phrase": 51,
+          "em-dash": 17,
+          "contrast-slop": 3,
+          "reversed-antithesis": 7,
+          "ellipsis": 9
+        }
+      },
+      "docsWithFinding": {
+        "NEUTRAL": 31,
+        "STRICT": 35
+      },
+      "sourceId": "ghostbuster"
+    }
+  ]
+}
