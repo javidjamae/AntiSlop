@@ -38,6 +38,10 @@ export interface RuleSet {
   headingDependentOpener: boolean
   /** Non-question H2/H3 headings ending on a bare it/this/that. */
   demonstrativeHeading: boolean
+  /** The reveal shape: "what nobody tells you", "the part everyone skips".
+   *  Teases the point instead of stating it, and casts the reader as the one
+   *  getting it wrong. Near-zero legitimate use, so it defaults on. */
+  revealShape: boolean
 }
 
 /** Conservative defaults: rules that false-positive legitimate human writing
@@ -55,6 +59,7 @@ export const NEUTRAL: RuleSet = {
   reversedAntithesis: false,
   headingDependentOpener: true,
   demonstrativeHeading: true,
+  revealShape: true,
 }
 
 /** Everything on. Warn-tier mindset: read each hit; a strict profile is for
@@ -72,6 +77,7 @@ export const STRICT: RuleSet = {
   reversedAntithesis: true,
   headingDependentOpener: true,
   demonstrativeHeading: true,
+  revealShape: true,
 }
 
 // Overused AI openers — matched at line start OR after ". ", so they're caught
@@ -114,11 +120,81 @@ export const DEFAULT_BANNED_PHRASES = [
   'i hope this helps', 'let me know if you', 'would you like me to',
   // Knowledge-cutoff leakage
   'knowledge cutoff', 'my training data', 'as of my last',
+  // Social-post cadence: the beat that asks the reader to be impressed.
+  // Drawn from t0ddharris/slopster (MIT).
+  'let that sink in', 'read that again', 'and that changes everything',
+  'imagine a world where', 'in the realm of', 'paradigm shift',
+  'unleash the power of', 'unleash the potential of',
+  // Closing filler, same family as "in conclusion"
+  'at the end of the day', 'all things considered', 'in the final analysis',
+  // Marketing puffery, same family as "boasts"/"breathtaking"
+  'best-in-class', 'world-class', 'next-generation',
+  "in today's fast-paced world", 'in today’s fast-paced world',
+  "in today's digital age", 'in today’s digital age',
 ]
+
+/**
+ * Opt-in vocabulary, deliberately NOT in the defaults. These are ordinary
+ * professional English that LLMs happen to overuse: banning `leverage` or
+ * `comprehensive` outright would make the linter grade writing QUALITY rather
+ * than flag machine authorship, which is the line this tool holds. A site that
+ * wants the stricter voice opts in per repo with `"phrasePacks": ["aggressive"]`.
+ *
+ * Sourced from t0ddharris/slopster's JargonSwaps and WeakWords (MIT). Its
+ * bare intensifiers (`very`, `clearly`, `obviously`) and personal-tic entries
+ * (`quiet\w*`, `sharp\w*`, `drift`, `lands`) are left out on purpose: a rule
+ * that fires on every word starting with "sharp" teaches writers to ignore the
+ * linter, which costs more than the tell it catches.
+ */
+export const AGGRESSIVE_PHRASES = [
+  'utilize', 'utilise', 'leverage', 'facilitate', 'comprehensive',
+  'innovative', 'groundbreaking', 'holistic', 'transformative',
+  'multifaceted', 'nuanced', 'synergy', 'bolster', 'unveil', 'streamline',
+  'elucidate', 'ascertain', 'endeavour', 'foster', 'unleash',
+  'full potential', 'at its core', 'that being said', 'to put it simply',
+  'this begs the question',
+]
+
+/** Named phrase packs a config opts into by name. See AGGRESSIVE_PHRASES. */
+export const PHRASE_PACKS: Record<string, string[]> = {
+  aggressive: AGGRESSIVE_PHRASES,
+}
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+// ---------- reveal shape ----------
+
+// The "here is the hidden truth / what you are getting wrong" framing.
+// Generalized from t0ddharris/slopster's Openers.yml (MIT), which lists the
+// same families as fixed tokens; these four regexes cover its list and the
+// rewordings a token match misses.
+// Two deliberate narrowings, both of which cost false positives when they were
+// absent. The first draft accepted a bare `people`/`they` as the subject and a
+// bare `says`/`knows` as the verb, which made "the audit records what people
+// say about the outage" and "we logged what they know" into findings. On a
+// default-ON rule that is the worst kind of bug.
+//
+// SUBJECT must be a universal quantifier. The tease works by claiming everyone
+// else is in the dark, so "nobody"/"everyone"/"most people" carry the shape and
+// a bare "people"/"they" is just ordinary English.
+const CROWD = `(?:nobody|no one|noone|everyone|everybody|most people)`
+// VERB must be a withholding or an error, and "tell" needs its object. "What
+// nobody tells you" is a tease; "what people tell the auditor" is a sentence.
+const REVEAL_VERB = `(?:tells?\\s+you|telling\\s+you|talks?\\s+about|warns?\\s+you|gets?\\s+wrong|miss(?:es)?|skips?|overlooks?)`
+export const REVEAL_SHAPE: RegExp[] = [
+  // "what nobody tells you", "the part everyone skips", "what most people miss"
+  new RegExp(`\\b(?:what|the (?:thing|part|bit|secret)|the (?:one )?thing)\\s+(?:that\\s+)?${CROWD}\\s+(?:really\\s+|actually\\s+|ever\\s+)?${REVEAL_VERB}`, 'i'),
+  // "nobody tells you", "no one warns you about"
+  new RegExp(`\\b(?:nobody|no one|noone)\\s+(?:ever\\s+)?(?:tells|warns|talks to|prepares)\\s+you\\b`, 'i'),
+  // "this is the thing everyone gets wrong", "that's the secret most people miss"
+  new RegExp(`\\b(?:this|that|it)(?:'s|\\s+is)\\s+the\\s+(?:thing|part|bit|secret)\\s+(?:that\\s+)?${CROWD}\\b`, 'i'),
+  // "what they don't tell you", "what they never mention". `they` is idiomatic
+  // HERE because the withholding verb carries the shape, so the verb is pinned
+  // to tell/mention rather than the loose family above.
+  new RegExp(`\\bwhat\\s+(?:they|${CROWD})\\s+(?:don'?t|doesn'?t|won'?t|never)\\s+(?:tell|mention)\\b`, 'i'),
+]
 
 // ---------- invisible / nonstandard unicode ----------
 
@@ -257,12 +333,29 @@ function arrowExempt(line: string, i: number, opts?: { trailingCta?: boolean }):
 
 /** Lint any text (title, description, body) against the mechanical tells. */
 export function lint(
-  text: string,
+  raw: string,
   rules: RuleSet = NEUTRAL,
   banned: string[] = DEFAULT_BANNED_PHRASES,
   extras: LintExtras = {}
 ): Violation[] {
-  if (!text) return []
+  if (!raw) return []
+  // Straighten the typographic apostrophe before matching. U+2019 is ONE code
+  // unit, same as U+0027, so this is index-preserving and every offset, mask
+  // position and excerpt below stays valid.
+  //
+  // This is not cosmetic. Generated prose is smart-quoted far more often than
+  // the plaintext corpora are, and every contraction-bearing pattern here was
+  // ASCII-only: `isn't a rewrite. It's a rename` was a finding while
+  // `isn’t a rewrite. It’s a rename` was clean, and the same held for the
+  // reveal-shape and banned-opener families. The rule that most needed to fire
+  // on model output was the one blind to how model output is punctuated.
+  const straighten = (s: string) => s.replace(/’/g, "'")
+  const text = straighten(raw)
+  banned = banned.map(straighten)
+  const openers = (extras.openers ?? BANNED_OPENERS).map(straighten)
+  // Longest first so a nested entry cannot claim the span ahead of the phrase
+  // that contains it (see the span dedup in the phrase loop).
+  const bannedByLength = [...banned].sort((a, b) => b.length - a.length)
   const violations: Violation[] = []
   const mask = buildSkipMask(text)
   const lines = text.split('\n')
@@ -356,7 +449,7 @@ export function lint(
     }
 
     if (rules.bannedOpeners) {
-      for (const opener of extras.openers ?? BANNED_OPENERS) {
+      for (const opener of openers) {
         const re = new RegExp(`(^\\s*|\\.\\s+)(${escapeRegex(opener)})\\b`, 'i')
         if ((m = re.exec(line))) push(li, m.index + m[1].length, `banned opener: "${opener}"`, 'Overused AI opener. State the thing directly.')
       }
@@ -366,7 +459,16 @@ export function lint(
     // contraction form can also match "not just X, but Y"), so hits are
     // deduped by span — one report per stretch of text.
     if (rules.contrastSlop) {
-      const reassert = /(?:\b(?:is|are|was|were)\s+not\b|\b(?:is|are|was|were)n'?t\b|(?:'s|'re)\s+not\b)[^.;:!?]{0,60}[.;:!?]\s+(?:it|that|this|they)(?:\s+(?:is|are)|'s|'re)\b/i
+      // The negation side accepts the copulas AND the do/modal auxiliaries
+      // ("doesn't expire", "don't help", "can't scale"); the reassertion side
+      // stays restricted to a COPULA or auxiliary follow-up, because that is
+      // what makes the shape a reassertion of identity rather than two
+      // ordinary sentences. Widening the follow-up to any lexical verb ("It
+      // leaks.", "They amplify the outage.") is what a token list does, and it
+      // swallows plain technical prose. Recall limit noted in RULES.md.
+      const NEG = `(?:\\b(?:is|are|was|were|do|does|did|can|could|would|will|has|have|had)\\s+not\\b|\\b(?:is|are|was|were|do|does|did|ca|could|would|wo|has|have|had)n'?t\\b|\\bcannot\\b|(?:'s|'re)\\s+not\\b)`
+      const REASSERT = `(?:it|that|this|they|these|those)(?:\\s+(?:is|are|was|were|does|do|did|will|can)|'s|'re)\\b`
+      const reassert = new RegExp(`${NEG}[^.;:!?]{0,60}[.;:!?]\\s+${REASSERT}`, 'i')
       const consequence = /\b(?:is|are)\s+not\s+[^,.;]{1,30},\s+(?:and\s+)?(?:until|unless)\b/i
       // The comma forms, mirrored from a production linter tuned on real copy: the
       // 60-char cap and the no-sentence-punctuation middle keep a match inside
@@ -393,6 +495,21 @@ export function lint(
       }
     }
 
+    // The reveal shape: the sentence withholds its point and sells the
+    // withholding ("what nobody tells you", "the part everyone skips"). It
+    // survives rewording, which is why a phrase list does not catch it, and it
+    // casts the reader as the one getting it wrong. Patterns are tried in
+    // order and only the first hit on a line reports, since the families
+    // overlap ("the thing everyone gets wrong" matches two of them).
+    if (rules.revealShape) {
+      for (const re of REVEAL_SHAPE) {
+        if ((m = re.exec(line))) {
+          push(li, m.index, 'reveal-shape', 'Teases the point instead of stating it, and casts the reader as the one getting it wrong. Say the thing directly.')
+          break
+        }
+      }
+    }
+
     if (rules.inlineHeaderBullets) {
       const ihb = /^(\s*[-*+]\s+)\*\*[^*\n]+?(?::\*\*|\*\*:)/
       if ((m = ihb.exec(line))) push(li, m[1].length, 'inline-header-bullet', 'Rewrite "**Term:** sentence" bullets as prose or plain list items.')
@@ -415,9 +532,18 @@ export function lint(
       }
     }
 
-    for (const phrase of banned) {
+    // Longest phrase first, then report once per span. Entries legitimately
+    // nest — the `aggressive` pack bans bare `unleash` while the defaults ban
+    // `unleash the power of` — and without this, one span produced one finding
+    // per matching entry, which reads as two problems in the same six words.
+    const phraseSpans: [number, number][] = []
+    for (const phrase of bannedByLength) {
       const re = new RegExp(`\\b${escapeRegex(phrase)}\\b`, 'i')
-      if ((m = re.exec(line))) push(li, m.index, `banned phrase: "${phrase}"`, 'AI filler. Rephrase or cut.')
+      if (!(m = re.exec(line))) continue
+      const [start, end] = [m.index, m.index + m[0].length]
+      if (phraseSpans.some(([s, e]) => start < e && end > s)) continue
+      phraseSpans.push([start, end])
+      push(li, start, `banned phrase: "${phrase}"`, 'AI filler. Rephrase or cut.')
     }
 
     for (const cr of extras.customRules ?? []) {

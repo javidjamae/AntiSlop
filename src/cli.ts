@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // antislop CLI — lint files or stdin for the mechanical tells of AI prose.
 //
-//   antislop file.md [more.md ...] [--strict] [--json] [--config=path]
+//   antislop file.md [more.md ...] [--strict] [--json] [--config=path] [--pack=name]
 //   cat draft.md | antislop [--strict]
 //
 // Per-repo voice: an `antislop.config.json` discovered upward from each
@@ -27,6 +27,10 @@ if (args.includes('--version')) {
 const strict = args.includes('--strict')
 const asJson = args.includes('--json')
 const explicitConfig = args.find((a) => a.startsWith('--config='))?.slice('--config='.length)
+// Repeatable and comma-separated both work: --pack=aggressive --pack=x, or --pack=a,b
+const packs = args
+  .filter((a) => a.startsWith('--pack='))
+  .flatMap((a) => a.slice('--pack='.length).split(',').map((s) => s.trim()).filter(Boolean))
 const paths = args.filter((a) => !a.startsWith('--'))
 
 function discoverConfig(startDir: string): string | null {
@@ -52,6 +56,9 @@ function loadConfig(forDir: string): ResolvedConfig {
     }
   }
   if (strict) cfg = { ...cfg, profile: 'strict' }
+  // CLI packs ADD to whatever the config already opted into, rather than
+  // replacing them: --pack is a one-off widening, not a redefinition of voice.
+  if (packs.length) cfg = { ...cfg, phrasePacks: [...(cfg.phrasePacks ?? []), ...packs] }
   try {
     return resolveConfig(cfg)
   } catch (e) {
@@ -96,7 +103,9 @@ if (paths.length) {
 } else {
   const stdin = readFileSync(0, 'utf8')
   if (!stdin.trim()) {
-    console.error('usage: antislop <file.md> [...] [--strict] [--json] [--config=path], or pipe text on stdin')
+    console.error(
+      'usage: antislop <file.md> [...] [--strict] [--json] [--config=path] [--pack=name], or pipe text on stdin'
+    )
     process.exit(2)
   }
   reports.push(lintDocument('<stdin>', stdin, loadConfig(process.cwd())))

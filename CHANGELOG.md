@@ -5,6 +5,50 @@ the Unreleased section, syncs `package.json` and `src/version.ts`, and tags,
 all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
+- Fix: `reveal-shape` fired on ordinary English. The subject family accepted a
+  bare `people`/`they` and the verb family accepted a bare `says`/`knows`, so
+  `the audit records what people say about the outage` was a finding, on a
+  rule that defaults ON. The subject is now a universal quantifier
+  (`nobody`/`everyone`/`most people`), which is what makes the construction a
+  tease, and `tell` requires its object.
+- Fix: every contraction-bearing rule was blind to the typographic apostrophe
+  (U+2019). `It isn't a rewrite. It's a rename.` was a finding while the
+  smart-quoted form was clean, and the same held for the reveal-shape,
+  banned-opener and banned-phrase families. Since generated prose is
+  smart-quoted far more often than plaintext corpora are, the rules that most
+  need to read model output were the ones that could not. Apostrophes are now
+  straightened before matching, which is index-preserving.
+- Fix: nested banned-phrase entries double-reported one span. The
+  `aggressive` pack bans bare `unleash` while the defaults ban
+  `unleash the power of`, so six words produced two findings. Longest entry
+  wins the span, once.
+
+
+- New rule `reveal-shape` (`revealShape`, on in NEUTRAL): the tease framing
+  that withholds its point and sells the withholding, and casts the reader as
+  the one getting it wrong.
+  Examples: `what nobody tells you`, `the part everyone skips`,
+  `this is the thing everyone gets wrong`.
+  It survives rewording, so a phrase list does not reach it.
+- Fix: `contrast-slop` missed the `do`/modal negations (`doesn't expire`,
+  `don't help`, `can't tune`, `cannot preempt`) and past-copula reassertions
+  (`It was a rename`), because both sides of the pattern accepted only
+  `is|are|was|were`. A bare lexical verb after the pronoun (`It leaks.`) stays
+  unmatched on purpose; RULES.md states the limit.
+- Default vocabulary gains the social-post and puffery tier:
+  `let that sink in`, `read that again`, `imagine a world where`,
+  `in the realm of`, `paradigm shift`, `unleash the power of`,
+  `at the end of the day`, `best-in-class`, `world-class`,
+  `next-generation`, and the `in today's` variants.
+- New opt-in vocabulary packs. `"phrasePacks": ["aggressive"]` in config, or
+  `--pack=aggressive` on the CLI, appends a second tier (`leverage`,
+  `utilize`, `comprehensive`, `foster`, `nuanced`) that is ordinary
+  professional English rather than a machine-authorship tell, so it stays out
+  of the defaults. An unknown pack name exits 2, matching the unknown-rule
+  behavior. Pack entries honor `bannedPhrases.remove`.
+- Attribution added for [Slopster](https://github.com/t0ddharris/slopster)
+  (MIT), the source of the reveal-shape families and much of the new
+  vocabulary.
 
 - Fix: an unrecognized key in the config's `rules` map was silently ignored, so
   a config written from the printed rule IDs (`reversed-antithesis` rather than

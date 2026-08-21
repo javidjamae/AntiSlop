@@ -28,6 +28,7 @@ npx github:javidjamae/AntiSlop#v0.3.1 file.md --strict
 ```bash
 antislop draft.md                 # neutral profile
 antislop draft.md --strict        # every rule on
+antislop draft.md --pack=aggressive  # add an opt-in vocabulary pack
 antislop a.md b.md c.md --json    # machine-readable output
 cat draft.md | antislop --strict  # stdin
 ```
@@ -54,9 +55,10 @@ Drop an `antislop.config.json` at a repo's root and the CLI picks it up for any 
   "profile": "strict",
   "rules": { "emDash": false },
   "bannedPhrases": {
-    "add": ["synergy", "best-in-class", "world-class"],
+    "add": ["circle back", "double-click on", "north star"],
     "remove": ["robust"]
   },
+  "phrasePacks": ["aggressive"],
   "openers": { "add": ["picture this"] },
   "arrowExemptions": { "trailingCta": true },
   "customRules": [
@@ -71,6 +73,8 @@ Drop an `antislop.config.json` at a repo's root and the CLI picks it up for any 
 
 `rules` accepts either the camelCase key or the rule ID as printed in findings, so `"arrow-symbol": false` and `"arrows": false` are equivalent. An unrecognized name exits 2 with the list of valid ones rather than being ignored. `profile` sets the base, `rules` overrides per rule, and the phrase lists take either an `add`/`remove` object (edits the defaults) or a plain array (replaces them). `--strict` on the CLI overrides the config's profile; `--config=path` pins a config explicitly. The same shapes are available in the API through `resolveConfig()`.
 
+`phrasePacks` opts into named vocabulary that stays out of the defaults. The `aggressive` pack bans `leverage`, `utilize`, `comprehensive`, `foster`, `nuanced`, and their neighbors: ordinary professional English that models overuse. Banning it grades writing quality rather than flagging machine authorship, so it belongs to a repo's voice rather than to every consumer of the linter. Pack entries still honor `bannedPhrases.remove`, and an unknown pack name exits 2 like an unknown rule.
+
 One scoping note: a linter is the enforcement half of a voice, the list of things that never ship. The generative half, what your writing should sound like, belongs in your style guide and your prompts. Keep the style guide next to the config, and encode into the config only what a regex can actually hold.
 
 ## Profiles
@@ -82,7 +86,7 @@ Code blocks, inline code, blockquotes, and link URLs are always exempt. Quoted s
 
 ## What it checks
 
-Seven categories, sixteen rules. The **NEUTRAL** column is the default profile; every rule listed turns on under `--strict`. [RULES.md](RULES.md) carries the per-rule table, the config key for each, and the precision notes from sweeping the rules over a published corpus before they shipped.
+Eight categories, seventeen rules. The **NEUTRAL** column is the default profile; every rule listed turns on under `--strict`. [RULES.md](RULES.md) carries the per-rule table, the config key for each, and the precision notes from sweeping the rules over a published corpus before they shipped.
 
 | Category | Rules | Fires on | NEUTRAL |
 |---|---|---|---|
@@ -91,6 +95,7 @@ Seven categories, sixteen rules. The **NEUTRAL** column is the default profile; 
 | Contrast flourishes | `contrast-slop`, `reversed-antithesis` | `It's not luck. It's process.`; `not just fast, but correct`; `we ship weekly, not quarterly` | off |
 | Formatting habits | `inline-header-bullet`, `bold-overuse`, `emoji-decoration` | `- **Speed:** users activate faster`; three or more bold spans in one paragraph; an emoji decorating a heading or bullet | bold and emoji only |
 | Referent problems | `heading-dependent-opener`, `demonstrative-heading` | a section whose first sentence reads `This is where teams fail`; a heading reading `Getting Started With It` | on |
+| Reveal framing | `reveal-shape` | `what nobody tells you`, `the part everyone skips`, `this is the thing everyone gets wrong`, `what they never mention` | on |
 | Fake formatting and bait | `unicode-bold`, `engagement-bait` | bold faked with unicode math characters; a speech-bubble emoji leading into a question | always |
 | Watermarks and fingerprints | `invisible-unicode` | zero-width characters, soft hyphens, directional marks, nonstandard spaces, variation-selector runs, and the Unicode tag block: the character-level channel that carries watermarks, per-copy fingerprints, and smuggled prompt injections | always |
 
@@ -127,6 +132,8 @@ Only high-precision, mechanically detectable tells live here. Patterns that need
 ## Attribution
 
 Several rules and the default vocabulary draw on Wikipedia's ["Signs of AI writing"](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing) and on [blader/humanizer](https://github.com/blader/humanizer) (MIT).
+
+The `reveal-shape` rule generalizes the families in [Slopster](https://github.com/t0ddharris/slopster)'s `Openers.yml` (MIT), and its `BannedWords.yml` contributed the social-post and puffery entries in the default vocabulary. The opt-in `aggressive` pack draws on the same project's `JargonSwaps.yml` and `WeakWords.yml`. Slopster ships as Vale rules and covers several of these families as fixed tokens; where the constructions generalize, AntiSlop implements them as regexes instead, and the entries that would fire on ordinary adjectives stay out.
 
 ## License
 

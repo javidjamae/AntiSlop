@@ -210,6 +210,134 @@ test('config: an always-on rule reports why it cannot be toggled', () => {
   assert.throws(() => resolveConfig({ rules: { 'invisible-unicode': false } as never }), /always on/)
 })
 
+test('reveal-shape fires on the tease families and defaults on', () => {
+  const hits = [
+    'This is the thing everyone gets wrong about queues.',
+    'What nobody tells you is that the retry budget is shared.',
+    'The part everyone skips is the dead-letter queue.',
+    'No one warns you about the cold-start penalty.',
+    "What they don't tell you is the quota resets monthly.",
+    "That's the secret most people miss.",
+  ]
+  for (const h of hits) {
+    assert.ok(rulesOf(h, NEUTRAL).includes('reveal-shape'), h)
+  }
+})
+
+test('reveal-shape: a bare people/they subject is ordinary English, not a tease', () => {
+  // Every line below was a FINDING before the subject was narrowed to a
+  // universal quantifier and "tell" was given its object. On a default-ON
+  // rule these are the expensive kind of false positive.
+  const clean = [
+    'The audit records what people say about the outage.',
+    'We logged what they know about the incident.',
+    "Ask what they don't know before designing the training.",
+    'It is the part people ignore.',
+    'That is the thing they get wrong.',
+    'The dashboard tells you which shard is hot.',
+  ]
+  for (const c of clean) {
+    assert.equal(lint(c, STRICT).filter((v) => v.rule === 'reveal-shape').length, 0, c)
+  }
+  // Swapping the bare subject for a universal quantifier restores the tease,
+  // and the rule fires again. That contrast IS the rule.
+  assert.ok(rulesOf('It is the part everyone ignores.', NEUTRAL).includes('reveal-shape'))
+  assert.ok(rulesOf('It is the part everyone skips.', NEUTRAL).includes('reveal-shape'))
+})
+
+test('typographic apostrophes match, because that is how models punctuate', () => {
+  // U+2019 is one code unit like U+0027, so straightening it before matching
+  // preserves every offset. Without it the contraction-bearing rules were
+  // blind to exactly the text they most need to read.
+  assert.ok(rulesOf('It isn’t a rewrite. It’s a rename.').includes('contrast-slop'))
+  assert.ok(rulesOf('You can’t tune this. It’s a hard limit.').includes('contrast-slop'))
+  assert.ok(rulesOf('What they don’t tell you is the quota resets.', NEUTRAL).includes('reveal-shape'))
+  assert.ok(rulesOf('Here’s why this matters.', NEUTRAL).some((r) => r.includes('banned opener')))
+  assert.ok(rulesOf('It’s important to note that this works.', NEUTRAL).some((r) => r.includes('banned phrase')))
+  // Offsets survive: the finding still points at the right line.
+  const v = lint('ok\n\nIt’s important to note that this works.', NEUTRAL)
+  assert.equal(v[0].line, 3)
+})
+
+test('banned phrases report once per span when entries nest', () => {
+  // The aggressive pack bans bare `unleash`; the defaults ban `unleash the
+  // power of`. One span must not read as two problems.
+  const rc = resolveConfig({ phrasePacks: ['aggressive'] })
+  const hits = lint('Unleash the power of the platform.', NEUTRAL, rc.banned)
+  assert.equal(hits.length, 1)
+  assert.ok(hits[0].rule.includes('unleash the power of'), 'the longer entry wins the span')
+  // Non-overlapping entries still report independently.
+  assert.equal(lint('We delve into a seamless tapestry.', NEUTRAL).length, 3)
+})
+
+test('reveal-shape leaves ordinary uses of its trigger words alone', () => {
+  // Every line below contains a word the patterns key on (part, everyone,
+  // most people, nobody, tells). A rule that fires here would be worse than
+  // no rule: writers stop reading the output.
+  const clean = [
+    'The part number is printed on the underside of the case.',
+    'Everyone on the team can deploy to staging.',
+    'Most people who hit this are running an older client.',
+    'The dashboard tells you which shard is hot.',
+    'Nobody owns this table, so it never gets vacuumed.',
+    'We skipped the part where the cache warms up.',
+  ]
+  for (const c of clean) {
+    assert.equal(lint(c, STRICT).filter((v) => v.rule === 'reveal-shape').length, 0, c)
+  }
+})
+
+test('reveal-shape reports once per line when families overlap', () => {
+  // "the thing everyone gets wrong" matches the tease family AND the
+  // "this is the thing <nobody>" family; one span, one finding.
+  const v = lint('This is the thing everyone gets wrong.', STRICT)
+  assert.equal(v.filter((x) => x.rule === 'reveal-shape').length, 1)
+})
+
+test('contrast-slop covers do/modal negations and past-copula reassertion', () => {
+  // Regression: the negation side accepted only is/are/was/were, and the
+  // reassertion side only a present copula, so these slipped through.
+  assert.ok(rulesOf("The migration wasn't a rewrite. It was a rename.").includes('contrast-slop'))
+  assert.ok(rulesOf("Retries don't help here. They're the amplifier.").includes('contrast-slop'))
+  assert.ok(rulesOf("The job doesn't retry. It's dropped.").includes('contrast-slop'))
+  assert.ok(rulesOf("You can't tune this. It's a hard limit.").includes('contrast-slop'))
+  assert.ok(rulesOf('The scheduler cannot preempt. It is cooperative.').includes('contrast-slop'))
+})
+
+test('contrast-slop stops at a bare lexical-verb follow-up (deliberate recall limit)', () => {
+  // "The cache doesn't expire. It leaks." is the reassertion SHAPE, but
+  // matching any verb after the pronoun swallows ordinary two-sentence
+  // technical prose. Precision wins; RULES.md states the limit.
+  assert.ok(!rulesOf("The cache doesn't expire. It leaks.").includes('contrast-slop'))
+  assert.ok(!rulesOf("Retries don't help. They amplify the outage.").includes('contrast-slop'))
+})
+
+test('phrase packs: opt-in only, and an unknown name throws', () => {
+  const line = 'We leverage a comprehensive framework to foster synergy.'
+  assert.equal(lint(line, NEUTRAL, resolveConfig({}).banned).length, 0)
+
+  const rc = resolveConfig({ phrasePacks: ['aggressive'] })
+  const hits = lint(line, NEUTRAL, rc.banned).map((v) => v.rule)
+  for (const p of ['leverage', 'comprehensive', 'foster', 'synergy']) {
+    assert.ok(hits.includes(`banned phrase: "${p}"`), p)
+  }
+  // A pack entry a site legitimately uses is still removable.
+  const trimmed = resolveConfig({ phrasePacks: ['aggressive'], bannedPhrases: { remove: ['leverage'] } })
+  assert.ok(!trimmed.banned.includes('leverage'))
+  assert.ok(trimmed.banned.includes('synergy'))
+
+  assert.throws(() => resolveConfig({ phrasePacks: ['nope'] }), /unknown phrase pack/)
+})
+
+test('imported vocabulary is in the defaults, and the tic entries are not', () => {
+  for (const p of ['let that sink in', 'imagine a world where', 'best-in-class', 'paradigm shift']) {
+    assert.ok(rulesOf(`x ${p} y`, NEUTRAL).includes(`banned phrase: "${p}"`), p)
+  }
+  // slopster bans /quiet\w*/ and /sharp\w*/; importing those wholesale would
+  // fire on any sentence using an ordinary adjective.
+  assert.equal(lint('The rollout was quiet and the error budget sharp.', STRICT).length, 0)
+})
+
 test('clean prose is clean', () => {
   assert.equal(lint('How to trim silence from a video', STRICT).length, 0)
 })
