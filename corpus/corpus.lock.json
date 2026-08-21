@@ -8,7 +8,14 @@
       "resolved": "15aef431579a3d2f2bac8cc25445ece1c8e9808c",
       "resolvedDate": "2021-12-29T16:10:08Z",
       "files": 50,
-      "detail": "rust-lang/book@15aef43157"
+      "detail": "rust-lang/book@15aef43157",
+      "dirs": [
+        {
+          "dir": "rust-book",
+          "role": "target",
+          "label": "rust-book"
+        }
+      ]
     },
     "k8s-concepts": {
       "kind": "github",
@@ -16,7 +23,14 @@
       "resolved": "fb6d636f14b1290afd2f16e21085d5523382680c",
       "resolvedDate": "2021-12-30T22:40:15Z",
       "files": 60,
-      "detail": "kubernetes/website@fb6d636f14"
+      "detail": "kubernetes/website@fb6d636f14",
+      "dirs": [
+        {
+          "dir": "k8s-concepts",
+          "role": "target",
+          "label": "k8s-concepts"
+        }
+      ]
     },
     "mdn-guides": {
       "kind": "github",
@@ -24,7 +38,14 @@
       "resolved": "b619806124edb1e36ed3a68066e01b810db81d05",
       "resolvedDate": "2021-12-30T20:01:04Z",
       "files": 60,
-      "detail": "mdn/content@b619806124"
+      "detail": "mdn/content@b619806124",
+      "dirs": [
+        {
+          "dir": "mdn-guides",
+          "role": "target",
+          "label": "mdn-guides"
+        }
+      ]
     },
     "wikipedia": {
       "kind": "wikipedia",
@@ -45,6 +66,30 @@
         "Rust (programming language)": {
           "revid": 1062190648,
           "timestamp": "2021-12-26T22:43:50Z"
+        },
+        "Compiler": {
+          "revid": 1062214819,
+          "timestamp": "2021-12-27T02:11:01Z"
+        },
+        "Operating system": {
+          "revid": 1059529136,
+          "timestamp": "2021-12-10T00:27:30Z"
+        },
+        "Transmission Control Protocol": {
+          "revid": 1060994683,
+          "timestamp": "2021-12-19T00:05:08Z"
+        },
+        "Garbage collection (computer science)": {
+          "revid": 1058419180,
+          "timestamp": "2021-12-03T11:26:42Z"
+        },
+        "Relational database": {
+          "revid": 1058545478,
+          "timestamp": "2021-12-04T05:55:57Z"
+        },
+        "Cryptographic hash function": {
+          "revid": 1061678097,
+          "timestamp": "2021-12-23T05:44:52Z"
         },
         "Coffee": {
           "revid": 1062706454,
@@ -69,10 +114,73 @@
         "Volcano": {
           "revid": 1057492486,
           "timestamp": "2021-11-27T23:56:11Z"
+        },
+        "Antarctica": {
+          "revid": 1061807039,
+          "timestamp": "2021-12-24T02:57:29Z"
+        },
+        "Impressionism": {
+          "revid": 1057361967,
+          "timestamp": "2021-11-27T04:39:56Z"
+        },
+        "Immune system": {
+          "revid": 1062486454,
+          "timestamp": "2021-12-28T19:24:35Z"
+        },
+        "Silk Road": {
+          "revid": 1062254076,
+          "timestamp": "2021-12-27T09:03:43Z"
+        },
+        "Plate tectonics": {
+          "revid": 1061821444,
+          "timestamp": "2021-12-24T05:34:28Z"
+        },
+        "Baroque music": {
+          "revid": 1059775872,
+          "timestamp": "2021-12-11T15:26:22Z"
+        },
+        "Coral reef": {
+          "revid": 1062529804,
+          "timestamp": "2021-12-29T01:07:50Z"
+        },
+        "Industrial Revolution": {
+          "revid": 1061179430,
+          "timestamp": "2021-12-20T03:43:51Z"
+        },
+        "Norman Conquest": {
+          "revid": 1060526095,
+          "timestamp": "2021-12-16T02:12:52Z"
+        },
+        "Mount Everest": {
+          "revid": 1062780915,
+          "timestamp": "2021-12-30T13:53:49Z"
+        },
+        "Beekeeping": {
+          "revid": 1061740053,
+          "timestamp": "2021-12-23T16:59:54Z"
+        },
+        "Lighthouse": {
+          "revid": 1060924885,
+          "timestamp": "2021-12-18T15:02:59Z"
+        },
+        "Tea": {
+          "revid": 1062738784,
+          "timestamp": "2021-12-30T06:43:07Z"
+        },
+        "Origami": {
+          "revid": 1061956435,
+          "timestamp": "2021-12-25T04:56:49Z"
         }
       },
-      "files": 10,
-      "detail": "10 articles at pinned oldids"
+      "files": 30,
+      "detail": "30 articles at pinned oldids",
+      "dirs": [
+        {
+          "dir": "wikipedia",
+          "role": "target",
+          "label": "wikipedia"
+        }
+      ]
     },
     "gutenberg": {
       "kind": "gutenberg",
@@ -85,7 +193,133 @@
         5200
       ],
       "files": 5,
-      "detail": "5 books"
+      "detail": "5 books",
+      "dirs": [
+        {
+          "dir": "gutenberg",
+          "role": "control",
+          "label": "gutenberg"
+        }
+      ]
+    },
+    "gpt-wiki-intro": {
+      "kind": "hf-paired",
+      "license": "CC-BY-4.0",
+      "files": 300,
+      "pairs": 150,
+      "detail": "150 pairs from aadityaubhat/GPT-wiki-intro/default",
+      "dirs": [
+        {
+          "dir": "gpt-wiki-intro-human",
+          "role": "paired-human",
+          "label": "gpt-wiki-intro (human)"
+        },
+        {
+          "dir": "gpt-wiki-intro-machine",
+          "role": "slop",
+          "label": "gpt-wiki-intro (machine)"
+        }
+      ]
+    },
+    "hc3-eli5": {
+      "kind": "hf-paired",
+      "license": "CC-BY-SA-4.0",
+      "files": 300,
+      "pairs": 150,
+      "detail": "150 pairs from Hello-SimpleAI/HC3/reddit_eli5",
+      "dirs": [
+        {
+          "dir": "hc3-eli5-human",
+          "role": "paired-human",
+          "label": "hc3-eli5 (human)"
+        },
+        {
+          "dir": "hc3-eli5-machine",
+          "role": "slop",
+          "label": "hc3-eli5 (machine)"
+        }
+      ]
+    },
+    "ghostbuster": {
+      "kind": "github-paired",
+      "license": "CC-BY-3.0",
+      "resolved": "86ebd72590556a81622986fab736ab9227a948af",
+      "files": 600,
+      "detail": "12/12 domain/variant sets",
+      "dirs": [
+        {
+          "dir": "ghostbuster-essay-human",
+          "role": "paired-human",
+          "label": "essay/human",
+          "pair": "essay"
+        },
+        {
+          "dir": "ghostbuster-essay-gpt",
+          "role": "slop",
+          "label": "essay/gpt",
+          "pair": "essay"
+        },
+        {
+          "dir": "ghostbuster-essay-claude",
+          "role": "slop",
+          "label": "essay/claude",
+          "pair": "essay"
+        },
+        {
+          "dir": "ghostbuster-essay-gpt_prompt1",
+          "role": "slop",
+          "label": "essay/gpt_prompt1",
+          "pair": "essay"
+        },
+        {
+          "dir": "ghostbuster-reuter-human",
+          "role": "paired-human",
+          "label": "reuter/human",
+          "pair": "reuter"
+        },
+        {
+          "dir": "ghostbuster-reuter-gpt",
+          "role": "slop",
+          "label": "reuter/gpt",
+          "pair": "reuter"
+        },
+        {
+          "dir": "ghostbuster-reuter-claude",
+          "role": "slop",
+          "label": "reuter/claude",
+          "pair": "reuter"
+        },
+        {
+          "dir": "ghostbuster-reuter-gpt_prompt1",
+          "role": "slop",
+          "label": "reuter/gpt_prompt1",
+          "pair": "reuter"
+        },
+        {
+          "dir": "ghostbuster-wp-human",
+          "role": "paired-human",
+          "label": "wp/human",
+          "pair": "wp"
+        },
+        {
+          "dir": "ghostbuster-wp-gpt",
+          "role": "slop",
+          "label": "wp/gpt",
+          "pair": "wp"
+        },
+        {
+          "dir": "ghostbuster-wp-claude",
+          "role": "slop",
+          "label": "wp/claude",
+          "pair": "wp"
+        },
+        {
+          "dir": "ghostbuster-wp-gpt_prompt1",
+          "role": "slop",
+          "label": "wp/gpt_prompt1",
+          "pair": "wp"
+        }
+      ]
     }
   }
 }

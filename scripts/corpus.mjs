@@ -9,16 +9,23 @@
 // Deliberately dependency-free, like the linter it measures. Node 20 has
 // global fetch; nothing else is needed.
 //
-// WHAT THIS MEASURES. Every source is human-written and pinned before the
-// cutoff, so ideally a rule fires zero times. It never does, and that is the
-// point: the rate IS the false-positive tail, and it decides which profile a
-// rule belongs in. A rule quiet here can default on; a rule that fires all
-// over Moby Dick defaults off and ships with the number attached.
+// TWO HALVES.
 //
-// WHAT THIS DOES NOT MEASURE. Recall. There is no trustworthy public corpus
-// of known-generated prose, and building one by generating it would measure
-// one model's habits on one day. Recall stays in the unit tests as fixtures.
-// A low rate here is evidence of precision alone, and the report says so.
+// PRECISION. Human sources pinned before the cutoff, where a finding is by
+// definition a false positive. The rate decides which profile a rule belongs
+// in: quiet enough to default on, or loud enough that it ships off with the
+// number attached.
+//
+// RECALL. Generated text PAIRED with a human treatment of the same prompt.
+// Pairing is what makes the comparison mean anything: both sides cover the
+// same topics, so a rate difference is the rule responding to how the text
+// was written rather than to what it is about. An unpaired slop corpus would
+// mostly measure subject matter.
+//
+// The recall number is a FLOOR, and the report says so in its own body. The
+// public paired corpora are 2022-2023 generators writing essays, news, and
+// answers. They are not 2026 models writing landing copy, which is the
+// register where slop is thickest and where this linter is aimed.
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -33,16 +40,35 @@ const LOCK_PATH = join(CORPUS, 'corpus.lock.json')
 const UA = { 'user-agent': 'antislop-corpus-harness (+https://github.com/javidjamae/AntiSlop)' }
 const GH = process.env.GITHUB_TOKEN ? { ...UA, authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : UA
 
-async function getJson(url, headers = UA) {
-  const r = await fetch(url, { headers })
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText} for ${url}`)
-  return r.json()
+/**
+ * Fetch with backoff.
+ *
+ * Added after a run silently dropped an entire domain: one GitHub secondary
+ * rate-limit response, one warning that scrolled past, and a report built on
+ * two thirds of the sources it claimed. A corpus harness that quietly
+ * measures less than it says it does is worse than one that fails, because
+ * the output still looks like a finished number.
+ */
+async function get(url, headers = UA, tries = 4) {
+  let lastErr
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(url, { headers })
+      if (r.ok) return r
+      // 403/429 from GitHub is usually a secondary rate limit; 5xx is transient.
+      if (r.status !== 403 && r.status !== 429 && r.status < 500) {
+        throw new Error(`${r.status} ${r.statusText} for ${url}`)
+      }
+      lastErr = new Error(`${r.status} ${r.statusText} for ${url}`)
+    } catch (e) {
+      lastErr = e
+    }
+    if (i < tries - 1) await new Promise((res) => setTimeout(res, 1000 * 2 ** i))
+  }
+  throw lastErr
 }
-async function getText(url, headers = UA) {
-  const r = await fetch(url, { headers })
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText} for ${url}`)
-  return r.text()
-}
+const getJson = async (url, headers = UA) => (await get(url, headers)).json()
+const getText = async (url, headers = UA) => (await get(url, headers)).text()
 
 /** Deterministic even sample: sort, then stride. Same pin gives the same
  *  files on every machine, so two reports are comparable. */
@@ -131,6 +157,111 @@ async function fetchGutenberg(src) {
   return { resolved: src.books.map((b) => b.id), files, detail: `${files} books` }
 }
 
+/**
+ * Paired human/machine text held as plain files in a GitHub repo, fetched at
+ * a pinned SHA through the same path as the human sources. Preferred over a
+ * dataset host when the data exists both ways: one fetch mechanism, one
+ * pinning story, one thing that can break.
+ *
+ * Each domain/variant pair becomes its own cache dir so the report can score
+ * `gpt` against `human` on the same prompts.
+ */
+async function fetchGithubPaired(src) {
+  const dirs = []
+  const missing = []
+  let files = 0
+  for (const domain of src.domains) {
+    for (const [variant, role] of Object.entries(src.variants)) {
+      // Scoped to the domain/variant subtree, because the whole-repo
+      // recursive tree truncates before reaching every domain. Recursive
+      // within that scope because layout differs per domain: essay and wp
+      // hold files directly, while reuter nests them under one directory per
+      // journalist. A non-recursive walk found zero blobs there and dropped
+      // the entire news domain without a word.
+      let tree
+      try {
+        tree = await getJson(
+          `https://api.github.com/repos/${src.repo}/git/trees/${src.ref}:${domain}/${variant}?recursive=1`,
+          GH
+        )
+      } catch (e) {
+        missing.push(`${domain}/${variant}: ${e.message}`)
+        continue
+      }
+      const blobs = tree.tree.filter((t) => t.type === 'blob' && t.path.endsWith('.txt')).map((t) => t.path)
+      if (!blobs.length) {
+        missing.push(`${domain}/${variant}: no .txt blobs in subtree`)
+        continue
+      }
+      const paths = sample(blobs, src.sample)
+      const dir = `${src.id}-${domain}-${variant}`
+      for (const p of paths) {
+        cacheWrite(
+          dir,
+          p,
+          await getText(`https://raw.githubusercontent.com/${src.repo}/${src.ref}/${domain}/${variant}/${p}`, UA)
+        )
+        files++
+      }
+      if (paths.length) dirs.push({ dir, role, label: `${domain}/${variant}`, pair: domain })
+    }
+  }
+  const expected = src.domains.length * Object.keys(src.variants).length
+  return {
+    resolved: src.ref,
+    files,
+    detail: `${dirs.length}/${expected} domain/variant sets`,
+    dirs,
+    ...(missing.length ? { missing } : {}),
+  }
+}
+
+/**
+ * Paired human/machine text from the Hugging Face datasets-server, which
+ * serves rows as plain JSON over HTTP with no auth and no client library, so
+ * a zero-dependency harness can read it.
+ *
+ * PAIRING IS THE POINT. Each row holds a human and a generated treatment of
+ * the SAME prompt, so a rate difference between the two sides is the rule
+ * responding to how the text was written rather than to what it is about.
+ * Comparing two unrelated corpora cannot separate those.
+ *
+ * Writes two cache dirs per source so the report can score them separately.
+ */
+async function fetchHfPaired(src) {
+  const dirs = { human: `${src.id}-human`, machine: `${src.id}-machine` }
+  const PAGE = 100
+  let got = 0
+  for (let offset = 0; got < src.pairs; offset += PAGE) {
+    const url =
+      `https://datasets-server.huggingface.co/rows?dataset=${encodeURIComponent(src.dataset)}` +
+      `&config=${encodeURIComponent(src.config)}&split=${encodeURIComponent(src.split)}` +
+      `&offset=${offset}&length=${Math.min(PAGE, src.pairs - got)}`
+    const page = await getJson(url, UA)
+    if (!page.rows?.length) break
+    for (const { row } of page.rows) {
+      // Some columns hold a list of answers; take the first.
+      const pick = (f) => (Array.isArray(row[f]) ? row[f][0] : row[f])
+      const h = pick(src.humanField)
+      const m = pick(src.machineField)
+      if (!h?.trim() || !m?.trim()) continue
+      const n = String(got).padStart(4, '0')
+      cacheWrite(dirs.human, `${n}.txt`, h.trim())
+      cacheWrite(dirs.machine, `${n}.txt`, m.trim())
+      if (++got >= src.pairs) break
+    }
+  }
+  return {
+    files: got * 2,
+    pairs: got,
+    detail: `${got} pairs from ${src.dataset}/${src.config}`,
+    dirs: [
+      { dir: dirs.human, role: 'paired-human', label: `${src.id} (human)` },
+      { dir: dirs.machine, role: 'slop', label: `${src.id} (machine)` },
+    ],
+  }
+}
+
 /** Gutenberg wraps each work in license boilerplate. Linting that would
  *  measure Project Gutenberg's legal text, not the author's prose. */
 function stripGutenbergBoilerplate(text) {
@@ -162,21 +293,39 @@ async function cmdFetch() {
   for (const src of MANIFEST.sources) {
     process.stdout.write(`fetching ${src.id} ... `)
     try {
-      const r =
-        src.kind === 'github'
-          ? await fetchGithub(src, MANIFEST.cutoff)
-          : src.kind === 'wikipedia'
-            ? await fetchWikipedia(src, MANIFEST.cutoff)
-            : await fetchGutenberg(src)
-      lock.sources[src.id] = { kind: src.kind, license: src.license, ...r }
+      const FETCHERS = {
+        github: () => fetchGithub(src, MANIFEST.cutoff),
+        wikipedia: () => fetchWikipedia(src, MANIFEST.cutoff),
+        gutenberg: () => fetchGutenberg(src),
+        'github-paired': () => fetchGithubPaired(src),
+        'hf-paired': () => fetchHfPaired(src),
+      }
+      const r = await FETCHERS[src.kind]()
+      // Single-dir sources cache under their own id; paired sources declare
+      // their dirs. Normalizing here keeps the report from re-deriving layout.
+      const dirs = r.dirs ?? [{ dir: src.id, role: src.role ?? 'target', label: src.id }]
+      lock.sources[src.id] = { kind: src.kind, license: src.license, ...r, dirs }
       console.log(`${r.files} files (${r.detail})`)
     } catch (e) {
       console.log(`FAILED: ${e.message}`)
       lock.sources[src.id] = { kind: src.kind, error: e.message, files: 0 }
     }
   }
-  // Written by `report`, which knows the run timestamp; keep the pins here.
   writeFileSync(LOCK_PATH, JSON.stringify(lock, null, 2) + '\n')
+
+  // Loud, last, and in the lock. A partial corpus still produces a report
+  // that looks finished, so the shortfall has to be visible in the artifact
+  // rather than in scrollback.
+  const broken = Object.entries(lock.sources).filter(([, s]) => s.error || s.missing?.length)
+  if (broken.length) {
+    console.log('\n' + '='.repeat(60))
+    console.log('INCOMPLETE FETCH: the report will understate coverage')
+    for (const [id, s] of broken) {
+      if (s.error) console.log(`  ${id}: ${s.error}`)
+      for (const m of s.missing ?? []) console.log(`  ${id}: ${m}`)
+    }
+    console.log('='.repeat(60))
+  }
   console.log(`\npins written to corpus/corpus.lock.json`)
 }
 
@@ -234,165 +383,214 @@ function cmdReport() {
     process.exit(2)
   }
   const lock = existsSync(LOCK_PATH) ? JSON.parse(readFileSync(LOCK_PATH, 'utf8')) : { sources: {} }
-  const results = {}
+
+  // A "unit" is one cache directory with a role. Human sources contribute one
+  // each; a paired source contributes a human dir and a machine dir per
+  // domain, which is what makes the machine-versus-human comparison possible
+  // on matched prompts.
+  const units = []
+  for (const src of MANIFEST.sources) {
+    for (const d of lock.sources?.[src.id]?.dirs ?? [{ dir: src.id, role: src.role, label: src.id }]) {
+      if (existsSync(join(CACHE, d.dir))) units.push({ ...d, src })
+    }
+  }
+
   const offenders = {}
   const samples = {}
-
-  for (const src of MANIFEST.sources) {
-    const dir = join(CACHE, src.id)
-    if (!existsSync(dir)) continue
-    const files = readdirSync(dir)
-    let lines = 0
-    let words = 0
-    const counts = { NEUTRAL: {}, STRICT: {} }
+  const slopSamples = {}
+  for (const u of units) {
+    const files = readdirSync(join(CACHE, u.dir))
+    u.files = files.length
+    u.lines = 0
+    u.counts = { NEUTRAL: {}, STRICT: {} }
+    u.docsWithFinding = { NEUTRAL: 0, STRICT: 0 }
 
     for (const f of files) {
-      const text = readFileSync(join(dir, f), 'utf8')
-      lines += text.split('\n').length
-      words += text.split(/\s+/).filter(Boolean).length
+      const text = readFileSync(join(CACHE, u.dir, f), 'utf8')
+      u.lines += text.split('\n').length
       for (const [profile, rules] of Object.entries(PROFILES)) {
-        for (const v of lintDocument(text, rules)) {
+        const hits = lintDocument(text, rules)
+        if (hits.length) u.docsWithFinding[profile]++
+        for (const v of hits) {
           const fam = familyOf(v.rule)
-          counts[profile][fam] = (counts[profile][fam] ?? 0) + 1
-          if (profile === 'STRICT') {
-            if (fam !== v.rule) offenders[v.rule] = (offenders[v.rule] ?? 0) + 1
-            // Keep a few real excerpts per rule: a rate says a rule is noisy,
-            // an excerpt says whether the noise is the rule's fault.
-            ;(samples[fam] ??= []).length < 3 && samples[fam].push(`${src.id}: ${v.excerpt}`)
-          }
+          u.counts[profile][fam] = (u.counts[profile][fam] ?? 0) + 1
+          if (profile !== 'STRICT') continue
+          if (fam !== v.rule && u.role !== 'slop') offenders[v.rule] = (offenders[v.rule] ?? 0) + 1
+          const bag = u.role === 'slop' ? slopSamples : samples
+          ;(bag[fam] ??= []).length < 3 && bag[fam].push(`${u.label}: ${v.excerpt}`)
         }
       }
     }
-    results[src.id] = { files: files.length, lines, words, counts, register: src.register, role: src.role }
   }
 
   const per1k = (n, lines) => (lines ? (n * 1000) / lines : 0)
-  const allRules = [...new Set(Object.values(results).flatMap((r) => Object.keys(r.counts.STRICT)))].sort()
-  const totalLines = Object.values(results).reduce((n, r) => n + r.lines, 0)
+  const byRole = (...roles) => units.filter((u) => roles.includes(u.role))
+  const linesOf = (us) => us.reduce((n, u) => n + u.lines, 0)
+  const hitsOf = (us, rule, p = 'STRICT') => us.reduce((n, u) => n + (u.counts[p][rule] ?? 0), 0)
+  const docsOf = (us) => us.reduce((n, u) => n + u.files, 0)
+  const flaggedOf = (us, p) => us.reduce((n, u) => n + u.docsWithFinding[p], 0)
+
+  const human = byRole('target')
+  const control = byRole('control')
+  const pairedHuman = byRole('paired-human')
+  const slop = byRole('slop')
+  const allRules = [...new Set(units.flatMap((u) => Object.keys(u.counts.STRICT)))].sort()
+  const totalLines = linesOf(units)
 
   const md = []
   md.push('# Corpus report')
   md.push('')
   md.push(
-    'Generated by `npm run corpus`. Every source is human-written and pinned to a revision before ' +
-      `\`${MANIFEST.cutoff}\`, so a rule that fires here is firing on human prose. The rate IS the ` +
-      'false-positive tail, and it is what decides whether a rule defaults on.'
-  )
-  md.push('')
-  md.push(
-    'This measures precision only. There is no trustworthy public corpus of known-generated prose, ' +
-      'so recall lives in the unit tests as fixtures. A quiet rule below is evidence that it is safe ' +
-      'to default on, and evidence of nothing else.'
+    'Generated by `npm run corpus`. Two halves. The **human** half is prose written before the ' +
+      `generated web, pinned to revisions predating \`${MANIFEST.cutoff}\`, where any finding is a ` +
+      'false positive. The **machine** half is generated text paired with a human treatment of the ' +
+      'same prompt, where a finding is a hit.'
   )
   md.push('')
   md.push('## Sources')
   md.push('')
-  md.push('| Source | Files | Lines | Register | License | Pin |')
-  md.push('|---|--:|--:|---|---|---|')
-  for (const src of MANIFEST.sources) {
-    const r = results[src.id]
-    const l = lock.sources?.[src.id]
-    if (!r) continue
-    const pin =
-      typeof l?.resolved === 'string'
-        ? `\`${l.resolved.slice(0, 10)}\``
-        : l?.resolvedDate
-          ? l.resolvedDate
-          : 'pinned ids'
-    md.push(`| ${src.id} | ${r.files} | ${r.lines.toLocaleString()} | ${r.register} | ${src.license} | ${pin} |`)
+  md.push('| Set | Role | Docs | Lines | Register | License |')
+  md.push('|---|---|--:|--:|---|---|')
+  for (const u of units) {
+    md.push(
+      `| ${u.label} | ${u.role} | ${u.files} | ${u.lines.toLocaleString()} | ${u.src.register} | ${u.src.license} |`
+    )
   }
-  md.push(`| **total** | | **${totalLines.toLocaleString()}** | | | |`)
+  md.push(`| **total** | | **${docsOf(units)}** | **${totalLines.toLocaleString()}** | | |`)
   md.push('')
-  md.push('## Findings per 1,000 lines, STRICT')
-  md.push('')
-  md.push('Every rule on. NEUTRAL rates follow.')
-  md.push('')
-  const head = MANIFEST.sources.filter((s) => results[s.id]).map((s) => s.id)
-  md.push(`| Rule | ${head.join(' | ')} | all |`)
-  md.push(`|---|${head.map(() => '--:').join('|')}|--:|`)
-  for (const rule of allRules) {
-    const cells = head.map((id) => per1k(results[id].counts.STRICT[rule] ?? 0, results[id].lines).toFixed(2))
-    const total = allRules.length
-      ? per1k(
-          Object.values(results).reduce((n, r) => n + (r.counts.STRICT[rule] ?? 0), 0),
-          totalLines
-        ).toFixed(2)
-      : '0'
-    md.push(`| \`${rule}\` | ${cells.join(' | ')} | **${total}** |`)
-  }
-  md.push('')
-  md.push('## Findings per 1,000 lines, NEUTRAL')
-  md.push('')
-  md.push('The default profile. These are the rates a user sees without `--strict`.')
-  md.push('')
-  const neutralRules = [...new Set(Object.values(results).flatMap((r) => Object.keys(r.counts.NEUTRAL)))].sort()
-  md.push(`| Rule | ${head.join(' | ')} | all |`)
-  md.push(`|---|${head.map(() => '--:').join('|')}|--:|`)
-  for (const rule of neutralRules) {
-    const cells = head.map((id) => per1k(results[id].counts.NEUTRAL[rule] ?? 0, results[id].lines).toFixed(2))
-    const total = per1k(
-      Object.values(results).reduce((n, r) => n + (r.counts.NEUTRAL[rule] ?? 0), 0),
-      totalLines
-    ).toFixed(2)
-    md.push(`| \`${rule}\` | ${cells.join(' | ')} | **${total}** |`)
-  }
-  md.push('')
-  // The comparison that actually decides a default. Target is the register
-  // this linter is pointed at; control is prose nobody would ever lint. Loud
-  // on control and quiet on target means the rule is matching English.
-  const roleOf = (role) => Object.entries(results).filter(([, r]) => r.role === role)
-  const roleLines = (role) => roleOf(role).reduce((n, [, r]) => n + r.lines, 0)
-  const roleHits = (role, rule) => roleOf(role).reduce((n, [, r]) => n + (r.counts.STRICT[rule] ?? 0), 0)
-  const tLines = roleLines('target')
-  const cLines = roleLines('control')
-  md.push('## Target against control, STRICT')
+
+  // ---- the headline: does running the linter on generated text say anything?
+  md.push('## Detection: machine against its own human pair')
   md.push('')
   md.push(
-    `Target is the register this linter is pointed at (${tLines.toLocaleString()} lines of technical and ` +
-      `encyclopedic prose). Control is pre-1930 literary prose (${cLines.toLocaleString()} lines), included ` +
-      'because nobody would run a slop linter on Moby Dick. A rule quiet on target and loud on control is ' +
-      'matching English rather than machine authorship, and belongs off by default.'
+    'Both sides answer the same prompts, so topic is held constant and a difference is the rule ' +
+      'responding to how the text was written. Percentages are documents with at least one finding.'
+  )
+  md.push('')
+  md.push('| Profile | Human pair | Machine | Separation |')
+  md.push('|---|--:|--:|--:|')
+  for (const p of ['NEUTRAL', 'STRICT']) {
+    const h = (flaggedOf(pairedHuman, p) / Math.max(1, docsOf(pairedHuman))) * 100
+    const m = (flaggedOf(slop, p) / Math.max(1, docsOf(slop))) * 100
+    md.push(`| ${p} | ${h.toFixed(1)}% | ${m.toFixed(1)}% | ${(m - h).toFixed(1)} points |`)
+  }
+  md.push('')
+  md.push('### Per-rule lift, STRICT')
+  md.push('')
+  md.push(
+    'Findings per 1,000 lines on each side, and the ratio. Lift above 1 means the rule fires more ' +
+      'on generated text than on human text about the same thing, which is the only evidence that a ' +
+      'rule detects authorship rather than subject matter.'
+  )
+  md.push('')
+  md.push('| Rule | Human pair | Machine | Lift |')
+  md.push('|---|--:|--:|--:|')
+  const lifted = allRules
+    .map((rule) => {
+      const h = per1k(hitsOf(pairedHuman, rule), linesOf(pairedHuman))
+      const m = per1k(hitsOf(slop, rule), linesOf(slop))
+      return { rule, h, m, lift: h > 0 ? m / h : m > 0 ? Infinity : 0 }
+    })
+    .sort((a, b) => b.lift - a.lift || b.m - a.m)
+  for (const { rule, h, m, lift } of lifted) {
+    const l = lift === Infinity ? 'human 0' : lift === 0 ? 'neither' : `${lift.toFixed(1)}x`
+    md.push(`| \`${rule}\` | ${h.toFixed(2)} | ${m.toFixed(2)} | **${l}** |`)
+  }
+  md.push('')
+  md.push(
+    'A rule reading `neither` mostly cannot fire on this data rather than failing to. The paired ' +
+      'corpora are plain prose with no markdown, no headings, and no emoji, so the structural rules ' +
+      '(`inline-header-bullet`, `bold-overuse`, `emoji-decoration`, `heading-dependent-opener`, ' +
+      '`demonstrative-heading`, `horizontal-rule`) and the glyph rules have nothing to match. Judge ' +
+      'those on the false-positive table below and on the unit fixtures, not here.'
+  )
+  md.push('')
+  md.push(
+    'Two rules score BELOW 1, meaning they fire more on the human side: `ellipsis` and ' +
+      '`reversed-antithesis`. Both are already off by default, and this is the second independent ' +
+      'reason for that. `invisible-unicode` is near zero on generated text because model output is ' +
+      'typographically clean; it catches a provenance problem (watermarks, fingerprints, injection) ' +
+      'rather than an authorship tell, which is why it is always on and scored separately.'
+  )
+  md.push('')
+  md.push('Caveats that travel with every number above:')
+  md.push('')
+  for (const c of MANIFEST.slopCaveats ?? []) md.push(`- ${c}`)
+  md.push('')
+
+  // ---- precision half
+  md.push('## False positives: target against control')
+  md.push('')
+  md.push(
+    `Target is the register this linter is pointed at (${linesOf(human).toLocaleString()} lines of ` +
+      `technical and encyclopedic prose). Control is pre-1930 literary prose ` +
+      `(${linesOf(control).toLocaleString()} lines), included because nobody would run a slop linter on ` +
+      'Moby Dick. A rule quiet on target and loud on control is matching English rather than machine ' +
+      'authorship, and belongs off by default.'
   )
   md.push('')
   md.push('| Rule | Target | Control | Default |')
   md.push('|---|--:|--:|---|')
   for (const rule of allRules) {
-    const dflt = defaultOf(rule)
     md.push(
-      `| \`${rule}\` | ${per1k(roleHits('target', rule), tLines).toFixed(2)} | ` +
-        `${per1k(roleHits('control', rule), cLines).toFixed(2)} | ${dflt} |`
+      `| \`${rule}\` | ${per1k(hitsOf(human, rule), linesOf(human)).toFixed(2)} | ` +
+        `${per1k(hitsOf(control, rule), linesOf(control)).toFixed(2)} | ${defaultOf(rule)} |`
     )
   }
   md.push('')
+  md.push('### Per source, STRICT')
+  md.push('')
+  const cols = units.filter((u) => u.role === 'target' || u.role === 'control')
+  md.push(`| Rule | ${cols.map((u) => u.label).join(' | ')} |`)
+  md.push(`|---|${cols.map(() => '--:').join('|')}|`)
+  for (const rule of allRules) {
+    md.push(
+      `| \`${rule}\` | ${cols.map((u) => per1k(u.counts.STRICT[rule] ?? 0, u.lines).toFixed(2)).join(' | ')} |`
+    )
+  }
+  md.push('')
+
   const top = Object.entries(offenders).sort((a, b) => b[1] - a[1]).slice(0, 20)
   if (top.length) {
-    md.push('## Which vocabulary entries actually fire')
+    md.push('## Which vocabulary entries fire on HUMAN prose')
     md.push('')
-    md.push('An entry firing often on this corpus is a candidate for demotion to the opt-in pack.')
+    md.push('An entry firing often here is a candidate for demotion to the opt-in pack.')
     md.push('')
     md.push('| Entry | Hits |')
     md.push('|---|--:|')
     for (const [rule, n] of top) md.push(`| ${rule.replace(/\|/g, '\\|')} | ${n} |`)
     md.push('')
   }
-  md.push('## Sample hits')
-  md.push('')
-  md.push('Three real excerpts per rule. A rate says a rule is noisy; an excerpt says whose fault that is.')
-  md.push('')
-  for (const rule of allRules) {
-    if (!samples[rule]?.length) continue
-    md.push(`**\`${rule}\`**`)
+
+  for (const [title, bag] of [['Sample hits, machine text', slopSamples], ['Sample hits, human text', samples]]) {
+    md.push(`## ${title}`)
     md.push('')
-    for (const s of samples[rule]) md.push(`- ${s.replace(/\|/g, '\\|').slice(0, 160)}`)
-    md.push('')
+    for (const rule of allRules) {
+      if (!bag[rule]?.length) continue
+      md.push(`**\`${rule}\`**`)
+      md.push('')
+      for (const s of bag[rule]) md.push(`- ${s.replace(/\|/g, '\\|').slice(0, 160)}`)
+      md.push('')
+    }
   }
 
   writeFileSync(join(CORPUS, 'REPORT.md'), md.join('\n'))
   writeFileSync(
     join(CORPUS, 'report.json'),
-    JSON.stringify({ cutoff: MANIFEST.cutoff, totalLines, results }, null, 2) + '\n'
+    JSON.stringify(
+      {
+        cutoff: MANIFEST.cutoff,
+        totalLines,
+        units: units.map(({ src, ...u }) => ({ ...u, sourceId: src.id })),
+      },
+      null,
+      2
+    ) + '\n'
   )
-  console.log(`corpus: ${totalLines.toLocaleString()} lines across ${Object.keys(results).length} sources`)
+  console.log(
+    `human ${linesOf([...human, ...control]).toLocaleString()} lines | ` +
+      `paired ${docsOf(pairedHuman)} human vs ${docsOf(slop)} machine docs`
+  )
   console.log('wrote corpus/REPORT.md and corpus/report.json')
 }
 

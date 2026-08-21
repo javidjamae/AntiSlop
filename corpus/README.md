@@ -21,13 +21,51 @@ variation.
 So a rule that fires here is firing on human prose. The rate IS the
 false-positive tail, and it decides which profile a rule belongs in.
 
-## What does not get measured
+## Recall, and why it is a floor
 
-Recall. There is no trustworthy public corpus of known-generated prose, and
-building one by generating it would measure one model's habits on one
-afternoon. Recall stays in the unit tests as fixtures. A quiet rule in the
-report is evidence that the rule is safe to default on, and evidence of
-nothing else.
+The second half of the corpus is generated text **paired** with a human
+treatment of the same prompt. Pairing is what makes the comparison mean
+anything: both sides cover the same topics, so a rate difference is the rule
+responding to how the text was written rather than to what it is about. An
+unpaired slop corpus would mostly measure subject matter.
+
+Three paired sources, listed in `manifest.json`. Ghostbuster (NAACL 2024) is
+plain files in a GitHub repo, so it uses the same pinned-SHA fetch as the human
+sources; GPT-wiki-intro and HC3 come from the Hugging Face datasets-server,
+which serves rows as plain JSON over HTTP with no auth and no client library.
+
+Every recall number is a **floor**, for reasons that are worth stating rather
+than burying:
+
+- The generators are GPT-3, ChatGPT 3.5, and Claude, from 2022 and 2023.
+  Several tells in this linter postdate them.
+- The registers are essays, news, creative writing, encyclopedia intros, and
+  forum answers. None of them is the landing copy and launch-post writing where
+  slop is thickest and where this linter is actually pointed.
+- The text was produced by plain completion prompts rather than by someone
+  asking for an engaging blog post, so the social-post tells have little chance
+  to appear at all.
+- The paired corpora are plain prose, so the markdown-structural rules cannot
+  fire in either direction. Judge those on the false-positive table and the
+  unit fixtures instead.
+
+### What was evaluated and rejected
+
+- **RAID** (`liamdugan/raid`): rows are grouped by adversarial attack, one of
+  which is a `zero_width_space` perturbation that would corrupt the
+  `invisible-unicode` measurement outright. Its filter index was also
+  unavailable across repeated attempts, which is disqualifying for a job that
+  has to run unattended.
+- **RoFT** (`liamdugan/human-detection`): the closest thing that exists to
+  human-graded slop, with 21,000 annotations of where readers think machine
+  text begins. Rejected on vintage and on subject. Its generators are GPT-2,
+  GPT-2-XL, and CTRL, and its annotation reasons are coherence failures
+  (ungrammatical, contradicts previous text, mixes up names) rather than the
+  tells this linter checks. It measures whether humans can spot an incoherent
+  2020 model, which is a different question.
+
+No public corpus records what humans *perceive* as slop in modern text. That
+gap is real and this harness does not close it.
 
 ## Sources
 

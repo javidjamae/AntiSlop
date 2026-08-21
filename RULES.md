@@ -22,9 +22,38 @@
 | `demonstrative-heading` | `demonstrativeHeading` | Non-question H2/H3 ending on a bare "it"/"this"/"that" | on | on |
 | `reveal-shape` | `revealShape` | The tease framing: `what nobody tells you`, `the part everyone skips`, `this is the thing everyone gets wrong`, `what they never mention`. Withholds the point, sells the withholding, and casts the reader as the one getting it wrong | on | on |
 
+## Measured detection
+
+Generated text, paired with a human treatment of the same prompt so topic is
+held constant. Documents with at least one finding:
+
+| Profile | Human pair | Machine | Separation |
+|---|--:|--:|--:|
+| NEUTRAL | 5.6% | 23.6% | 18.0 points |
+| STRICT | 20.0% | 33.2% | 13.2 points |
+
+Per-rule lift, meaning the STRICT rate on machine text divided by the rate on
+its human pair. Above 1 is the only evidence that a rule responds to
+authorship rather than to subject matter.
+
+| Rule | Lift | Reading |
+|---|--:|---|
+| `banned phrase` | 9.6x | The vocabulary list does nearly all of the detection work |
+| `contrast-slop` | 1.7x | Real but modest |
+| `em-dash` | 1.7x | Real but modest, and still too noisy on human prose to default on |
+| `reversed-antithesis` | 0.4x | Fires MORE on human writing. A second, independent reason it defaults off |
+| `ellipsis` | 0.1x | Fires ten times more on human writing |
+| `invisible-unicode` | 0.0x | Model output is typographically clean. This rule catches a provenance problem rather than an authorship tell |
+
+Every number here is a floor. The public paired corpora are 2022 and 2023
+generators writing essays, news, and answers; none of them is the landing copy
+where slop runs thickest. The markdown-structural rules cannot fire on
+plain-text corpora at all and are judged on the table below instead.
+[corpus/README.md](corpus/README.md) states the limits in full.
+
 ## Measured precision
 
-Rates below are findings per 1,000 lines against 95,000 lines of human prose
+Rates below are findings per 1,000 lines against 101,000 lines of human prose
 pinned to revisions predating the generated web, under STRICT. Reproduce with
 `npm run corpus`; method and sources are in [corpus/README.md](corpus/README.md)
 and the current numbers in [corpus/REPORT.md](corpus/REPORT.md).
@@ -37,22 +66,22 @@ matching English rather than machine authorship, and belongs off by default.
 
 | Rule | Target | Control | Default | Reading |
 |---|--:|--:|---|---|
-| `em-dash` | 2.42 | 37.88 | off | The control rate is a fact about Victorian typography, and the reason off is the only honest setting |
-| `ellipsis` | 1.21 | 0.87 | off | Fires on enumeration and quoted ranges as much as on drama |
-| `reversed-antithesis` | 0.99 | 2.77 | off | Most hits are content-bearing (`a JSON number, not a string`) |
-| `invisible-unicode` | 3.46 | 0.03 | always | Genuine hits. Almost all are U+00A0 in one source, and a no-break space in running prose is an artifact worth seeing |
-| `banned phrase` | 0.66 | 0.51 | always | Concentrated in a few entries; the report names them |
-| `inline-header-bullet` | 0.38 | 0.00 | off | A real pattern in edited human docs, which is why it is STRICT-only |
-| `contrast-slop` | 0.27 | 0.32 | off | Tightened against this corpus; see below |
-| `arrow-symbol` | 0.25 | 0.00 | on | Residual: multi-word pipeline stages defeat the capitalized-token exemption |
-| `heading-dependent-opener` | 0.19 | 0.00 | on | |
+| `em-dash` | 4.09 | 37.88 | off | The control rate is a fact about Victorian typography, and the reason off is the only honest setting |
+| `invisible-unicode` | 2.99 | 0.03 | always | Genuine hits, mostly U+00A0. A no-break space in running prose is an artifact worth seeing |
+| `ellipsis` | 1.45 | 0.87 | off | Fires on enumeration and quoted ranges as much as on drama |
+| `reversed-antithesis` | 1.22 | 2.77 | off | Most hits are content-bearing (`a JSON number, not a string`) |
+| `banned phrase` | 0.82 | 0.51 | always | Concentrated in a few entries; the report names them |
+| `inline-header-bullet` | 0.33 | 0.00 | off | A real pattern in edited human docs, which is why it is STRICT-only |
+| `contrast-slop` | 0.30 | 0.32 | off | Tightened against this corpus; see below |
+| `arrow-symbol` | 0.21 | 0.00 | on | Residual: multi-word pipeline stages defeat the capitalized-token exemption |
+| `heading-dependent-opener` | 0.16 | 0.00 | on | |
 | `bold-overuse` | 0.05 | 0.00 | on | |
-| `banned opener` | 0.03 | 0.00 | on | |
-| `demonstrative-heading` | 0.03 | 0.00 | on | |
-| `emoji-decoration` | 0.03 | 0.00 | on | |
-| `reveal-shape` | 0.00 | 0.00 | on | No hits in 95,205 lines |
+| `banned opener` | 0.02 | 0.00 | on | |
+| `demonstrative-heading` | 0.02 | 0.00 | on | |
+| `emoji-decoration` | 0.02 | 0.00 | on | |
+| `reveal-shape` | 0.00 | 0.00 | on | No hits in 101,511 lines |
 
-Every default-on rule sits at or below 0.25 per 1,000 lines on the target
+Every default-on rule sits at or below 0.21 per 1,000 lines on the target
 register. `invisible-unicode` is higher and always on, and its hits are real.
 
 Notes the corpus produced:
