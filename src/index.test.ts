@@ -224,6 +224,52 @@ test('reveal-shape fires on the tease families and defaults on', () => {
   }
 })
 
+test('reveal-shape: a bare people/they subject is ordinary English, not a tease', () => {
+  // Every line below was a FINDING before the subject was narrowed to a
+  // universal quantifier and "tell" was given its object. On a default-ON
+  // rule these are the expensive kind of false positive.
+  const clean = [
+    'The audit records what people say about the outage.',
+    'We logged what they know about the incident.',
+    "Ask what they don't know before designing the training.",
+    'It is the part people ignore.',
+    'That is the thing they get wrong.',
+    'The dashboard tells you which shard is hot.',
+  ]
+  for (const c of clean) {
+    assert.equal(lint(c, STRICT).filter((v) => v.rule === 'reveal-shape').length, 0, c)
+  }
+  // Swapping the bare subject for a universal quantifier restores the tease,
+  // and the rule fires again. That contrast IS the rule.
+  assert.ok(rulesOf('It is the part everyone ignores.', NEUTRAL).includes('reveal-shape'))
+  assert.ok(rulesOf('It is the part everyone skips.', NEUTRAL).includes('reveal-shape'))
+})
+
+test('typographic apostrophes match, because that is how models punctuate', () => {
+  // U+2019 is one code unit like U+0027, so straightening it before matching
+  // preserves every offset. Without it the contraction-bearing rules were
+  // blind to exactly the text they most need to read.
+  assert.ok(rulesOf('It isn’t a rewrite. It’s a rename.').includes('contrast-slop'))
+  assert.ok(rulesOf('You can’t tune this. It’s a hard limit.').includes('contrast-slop'))
+  assert.ok(rulesOf('What they don’t tell you is the quota resets.', NEUTRAL).includes('reveal-shape'))
+  assert.ok(rulesOf('Here’s why this matters.', NEUTRAL).some((r) => r.includes('banned opener')))
+  assert.ok(rulesOf('It’s important to note that this works.', NEUTRAL).some((r) => r.includes('banned phrase')))
+  // Offsets survive: the finding still points at the right line.
+  const v = lint('ok\n\nIt’s important to note that this works.', NEUTRAL)
+  assert.equal(v[0].line, 3)
+})
+
+test('banned phrases report once per span when entries nest', () => {
+  // The aggressive pack bans bare `unleash`; the defaults ban `unleash the
+  // power of`. One span must not read as two problems.
+  const rc = resolveConfig({ phrasePacks: ['aggressive'] })
+  const hits = lint('Unleash the power of the platform.', NEUTRAL, rc.banned)
+  assert.equal(hits.length, 1)
+  assert.ok(hits[0].rule.includes('unleash the power of'), 'the longer entry wins the span')
+  // Non-overlapping entries still report independently.
+  assert.equal(lint('We delve into a seamless tapestry.', NEUTRAL).length, 3)
+})
+
 test('reveal-shape leaves ordinary uses of its trigger words alone', () => {
   // Every line below contains a word the patterns key on (part, everyone,
   // most people, nobody, tells). A rule that fires here would be worse than

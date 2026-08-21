@@ -170,17 +170,30 @@ function escapeRegex(s: string): string {
 // Generalized from t0ddharris/slopster's Openers.yml (MIT), which lists the
 // same families as fixed tokens; these four regexes cover its list and the
 // rewordings a token match misses.
-const NOBODY = `(?:nobody|no one|noone|most people|everyone|people|they)`
-const REVEAL_VERB = `(?:tells?|telling|talks? about|says?|mentions?|warns?|knows?|gets? wrong|miss(?:es)?|skips?|overlooks?|ignores?|forgets?)`
+// Two deliberate narrowings, both of which cost false positives when they were
+// absent. The first draft accepted a bare `people`/`they` as the subject and a
+// bare `says`/`knows` as the verb, which made "the audit records what people
+// say about the outage" and "we logged what they know" into findings. On a
+// default-ON rule that is the worst kind of bug.
+//
+// SUBJECT must be a universal quantifier. The tease works by claiming everyone
+// else is in the dark, so "nobody"/"everyone"/"most people" carry the shape and
+// a bare "people"/"they" is just ordinary English.
+const CROWD = `(?:nobody|no one|noone|everyone|everybody|most people)`
+// VERB must be a withholding or an error, and "tell" needs its object. "What
+// nobody tells you" is a tease; "what people tell the auditor" is a sentence.
+const REVEAL_VERB = `(?:tells?\\s+you|telling\\s+you|talks?\\s+about|warns?\\s+you|gets?\\s+wrong|miss(?:es)?|skips?|overlooks?)`
 export const REVEAL_SHAPE: RegExp[] = [
-  // "what nobody tells you", "the part everyone skips", "the thing people miss"
-  new RegExp(`\\b(?:what|the (?:thing|part|bit|secret)|the (?:one )?thing)\\s+(?:that\\s+)?${NOBODY}\\s+(?:really\\s+|actually\\s+|ever\\s+)?${REVEAL_VERB}`, 'i'),
+  // "what nobody tells you", "the part everyone skips", "what most people miss"
+  new RegExp(`\\b(?:what|the (?:thing|part|bit|secret)|the (?:one )?thing)\\s+(?:that\\s+)?${CROWD}\\s+(?:really\\s+|actually\\s+|ever\\s+)?${REVEAL_VERB}`, 'i'),
   // "nobody tells you", "no one warns you about"
   new RegExp(`\\b(?:nobody|no one|noone)\\s+(?:ever\\s+)?(?:tells|warns|talks to|prepares)\\s+you\\b`, 'i'),
-  // "this is the thing everyone gets wrong", "that's the part people skip"
-  new RegExp(`\\b(?:this|that|it)(?:'s|\\s+is)\\s+the\\s+(?:thing|part|bit|secret)\\s+(?:that\\s+)?${NOBODY}\\b`, 'i'),
-  // "what they don't tell you", "what they never mention"
-  new RegExp(`\\bwhat\\s+${NOBODY}\\s+(?:don'?t|doesn'?t|won'?t|never)\\s+${REVEAL_VERB}`, 'i'),
+  // "this is the thing everyone gets wrong", "that's the secret most people miss"
+  new RegExp(`\\b(?:this|that|it)(?:'s|\\s+is)\\s+the\\s+(?:thing|part|bit|secret)\\s+(?:that\\s+)?${CROWD}\\b`, 'i'),
+  // "what they don't tell you", "what they never mention". `they` is idiomatic
+  // HERE because the withholding verb carries the shape, so the verb is pinned
+  // to tell/mention rather than the loose family above.
+  new RegExp(`\\bwhat\\s+(?:they|${CROWD})\\s+(?:don'?t|doesn'?t|won'?t|never)\\s+(?:tell|mention)\\b`, 'i'),
 ]
 
 // ---------- invisible / nonstandard unicode ----------
@@ -320,12 +333,29 @@ function arrowExempt(line: string, i: number, opts?: { trailingCta?: boolean }):
 
 /** Lint any text (title, description, body) against the mechanical tells. */
 export function lint(
-  text: string,
+  raw: string,
   rules: RuleSet = NEUTRAL,
   banned: string[] = DEFAULT_BANNED_PHRASES,
   extras: LintExtras = {}
 ): Violation[] {
-  if (!text) return []
+  if (!raw) return []
+  // Straighten the typographic apostrophe before matching. U+2019 is ONE code
+  // unit, same as U+0027, so this is index-preserving and every offset, mask
+  // position and excerpt below stays valid.
+  //
+  // This is not cosmetic. Generated prose is smart-quoted far more often than
+  // the plaintext corpora are, and every contraction-bearing pattern here was
+  // ASCII-only: `isn't a rewrite. It's a rename` was a finding while
+  // `isn’t a rewrite. It’s a rename` was clean, and the same held for the
+  // reveal-shape and banned-opener families. The rule that most needed to fire
+  // on model output was the one blind to how model output is punctuated.
+  const straighten = (s: string) => s.replace(/’/g, "'")
+  const text = straighten(raw)
+  banned = banned.map(straighten)
+  const openers = (extras.openers ?? BANNED_OPENERS).map(straighten)
+  // Longest first so a nested entry cannot claim the span ahead of the phrase
+  // that contains it (see the span dedup in the phrase loop).
+  const bannedByLength = [...banned].sort((a, b) => b.length - a.length)
   const violations: Violation[] = []
   const mask = buildSkipMask(text)
   const lines = text.split('\n')
@@ -419,7 +449,7 @@ export function lint(
     }
 
     if (rules.bannedOpeners) {
-      for (const opener of extras.openers ?? BANNED_OPENERS) {
+      for (const opener of openers) {
         const re = new RegExp(`(^\\s*|\\.\\s+)(${escapeRegex(opener)})\\b`, 'i')
         if ((m = re.exec(line))) push(li, m.index + m[1].length, `banned opener: "${opener}"`, 'Overused AI opener. State the thing directly.')
       }
@@ -502,9 +532,18 @@ export function lint(
       }
     }
 
-    for (const phrase of banned) {
+    // Longest phrase first, then report once per span. Entries legitimately
+    // nest — the `aggressive` pack bans bare `unleash` while the defaults ban
+    // `unleash the power of` — and without this, one span produced one finding
+    // per matching entry, which reads as two problems in the same six words.
+    const phraseSpans: [number, number][] = []
+    for (const phrase of bannedByLength) {
       const re = new RegExp(`\\b${escapeRegex(phrase)}\\b`, 'i')
-      if ((m = re.exec(line))) push(li, m.index, `banned phrase: "${phrase}"`, 'AI filler. Rephrase or cut.')
+      if (!(m = re.exec(line))) continue
+      const [start, end] = [m.index, m.index + m[0].length]
+      if (phraseSpans.some(([s, e]) => start < e && end > s)) continue
+      phraseSpans.push([start, end])
+      push(li, start, `banned phrase: "${phrase}"`, 'AI filler. Rephrase or cut.')
     }
 
     for (const cr of extras.customRules ?? []) {

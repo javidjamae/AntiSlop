@@ -5,6 +5,24 @@ the Unreleased section, syncs `package.json` and `src/version.ts`, and tags,
 all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
+- Fix: `reveal-shape` fired on ordinary English. The subject family accepted a
+  bare `people`/`they` and the verb family accepted a bare `says`/`knows`, so
+  `the audit records what people say about the outage` was a finding, on a
+  rule that defaults ON. The subject is now a universal quantifier
+  (`nobody`/`everyone`/`most people`), which is what makes the construction a
+  tease, and `tell` requires its object.
+- Fix: every contraction-bearing rule was blind to the typographic apostrophe
+  (U+2019). `It isn't a rewrite. It's a rename.` was a finding while the
+  smart-quoted form was clean, and the same held for the reveal-shape,
+  banned-opener and banned-phrase families. Since generated prose is
+  smart-quoted far more often than plaintext corpora are, the rules that most
+  need to read model output were the ones that could not. Apostrophes are now
+  straightened before matching, which is index-preserving.
+- Fix: nested banned-phrase entries double-reported one span. The
+  `aggressive` pack bans bare `unleash` while the defaults ban
+  `unleash the power of`, so six words produced two findings. Longest entry
+  wins the span, once.
+
 
 - New rule `reveal-shape` (`revealShape`, on in NEUTRAL): the tease framing
   that withholds its point and sells the withholding, and casts the reader as
