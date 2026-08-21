@@ -56,8 +56,9 @@ plain-text corpora at all and are judged on the table below instead.
 
 Rates below are findings per 1,000 lines against 101,400 lines of human prose
 pinned to revisions predating the generated web, under STRICT. Reproduce with
-`npm run corpus`; method and sources are in [corpus/README.md](corpus/README.md)
-and the current numbers in [corpus/REPORT.md](corpus/REPORT.md).
+`npm run corpus`; method and sources are in [corpus/README.md](corpus/README.md),
+the current numbers in [corpus/REPORT.md](corpus/REPORT.md), and the rendered
+report at [javidjamae.github.io/AntiSlop](https://javidjamae.github.io/AntiSlop/).
 
 Read the two columns against each other. **Target** is technical documentation
 and encyclopedic writing, the register this linter is pointed at. **Control**

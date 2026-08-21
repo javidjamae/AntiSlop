@@ -26,12 +26,21 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: corpus-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   report:
     runs-on: ubuntu-latest
-    # Needed only by the release-upload step; every other trigger reads.
     permissions:
-      contents: write
+      contents: write # release upload, and the scheduled refresh branch
+      pull-requests: write # the scheduled refresh PR
+      # configure-pages with `enablement: true` turns Pages on via the REST
+      # API on first run, and that call needs pages: write on THIS job. Without
+      # it the step fails with a 403 and the site is never created — the exact
+      # manual step the enablement flag exists to avoid.
+      pages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -57,8 +66,23 @@ jobs:
           path: |
             corpus/REPORT.md
             corpus/report.json
+            corpus/report.html
             corpus/corpus.lock.json
           retention-days: 90
+
+      - name: Assemble the Pages site
+        run: |
+          mkdir -p _site
+          cp corpus/report.html _site/index.html
+          cp corpus/REPORT.md corpus/report.json corpus/corpus.lock.json _site/
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
 
       - name: Attach the report to the release
         # Tag push and the release build race: release.yml is creating the
@@ -82,3 +106,48 @@ jobs:
             sleep 20
           done
           echo "release $TAG never appeared; the report is still in this run's artifacts"
+
+      - name: Open a PR with the refreshed report
+        # The in-repo REPORT.md is the copy GitHub renders and RULES.md cites,
+        # and it only moves when someone commits it. Without this the monthly
+        # run produced a number that evaporated into a 90-day artifact while
+        # the published one drifted out of date.
+        #
+        # Opened as a DRAFT and never merged here. A PR raised with the default
+        # GITHUB_TOKEN does not trigger other workflows, so CI will not run on
+        # it. That is stated in the PR body so a missing green check is not
+        # read as a failure.
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="corpus/refresh-$(date -u +%Y-%m)"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add corpus/REPORT.md corpus/report.json corpus/corpus.lock.json
+          # The report carries a generation date, so every run has a diff.
+          # That is deliberate: a PR each month is evidence the harness ran,
+          # where silence would equally mean it broke.
+          git commit -m "corpus: refresh the measured report ($(date -u +%Y-%m-%d))"
+          git push -u origin "$BRANCH" --force
+          if gh pr view "$BRANCH" >/dev/null 2>&1; then
+            echo "PR already open for $BRANCH"
+          else
+            gh pr create --draft --base main --head "$BRANCH" \
+              --title "corpus: refresh the measured report ($(date -u +%Y-%m))" \
+              --body-file .github/corpus-refresh-pr-body.md
+          fi
+
+  deploy-pages:
+    needs: report
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

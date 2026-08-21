@@ -403,6 +403,95 @@ async function cmdFetch() {
 const PROFILES = { NEUTRAL, STRICT }
 
 /**
+ * Render the report to a standalone page for GitHub Pages.
+ *
+ * A deliberately small markdown subset, because this only ever renders THIS
+ * generator's own output: headings, tables, lists, paragraphs, and the inline
+ * run of code/bold/links. Pulling a markdown library in would be the first
+ * dependency this repo has ever taken, for a file we also control the
+ * producer of.
+ */
+function renderHtml(md, generated) {
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  // Inline pass runs AFTER escaping, and code wins over bold so that a
+  // backticked `**x**` stays literal.
+  const inline = (s) =>
+    esc(s)
+      .replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`)
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+
+  const out = []
+  const lines = md.split('\n')
+  let inTable = false
+  let inList = false
+  const closeList = () => { if (inList) { out.push('</ul>'); inList = false } }
+  const closeTable = () => { if (inTable) { out.push('</tbody></table></div>'); inTable = false } }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const h = line.match(/^(#{1,4})\s+(.*)$/)
+    if (h) { closeList(); closeTable(); out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); continue }
+
+    if (/^\s*\|/.test(line)) {
+      const cells = line.split('|').slice(1, -1).map((c) => c.trim())
+      if (/^[\s|:-]+$/.test(line)) continue // the ---|--- separator row
+      if (!inTable) {
+        closeList()
+        out.push('<div class="tw"><table><thead><tr>' + cells.map((c) => `<th>${inline(c)}</th>`).join('') + '</tr></thead><tbody>')
+        inTable = true
+      } else {
+        out.push('<tr>' + cells.map((c) => `<td>${inline(c)}</td>`).join('') + '</tr>')
+      }
+      continue
+    }
+    closeTable()
+
+    const li = line.match(/^\s*-\s+(.*)$/)
+    if (li) { if (!inList) { out.push('<ul>'); inList = true } out.push(`<li>${inline(li[1])}</li>`); continue }
+    closeList()
+
+    if (!line.trim()) continue
+    out.push(`<p>${inline(line)}</p>`)
+  }
+  closeList(); closeTable()
+
+  return `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AntiSlop corpus report</title>
+<meta name="description" content="Measured false-positive and detection rates for every AntiSlop rule, against human prose pinned before the generated web.">
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--muted:#666;--line:#e3e3e3;--accent:#0b5fff;--code:#f4f4f5}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e8e8ea;--muted:#9a9aa2;--line:#2a2d35;--accent:#7aa2ff;--code:#191c22}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.25rem 5rem}
+h1{font-size:2rem;letter-spacing:-.02em;margin:0 0 .25rem}
+h2{font-size:1.35rem;margin:2.5rem 0 .5rem;padding-top:1.25rem;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.75rem 0 .4rem;color:var(--muted)}
+p{margin:.7rem 0}
+ul{margin:.7rem 0;padding-left:1.25rem}
+li{margin:.3rem 0}
+code{background:var(--code);padding:.12em .38em;border-radius:4px;font:.88em ui-monospace,SFMono-Regular,Menlo,monospace}
+a{color:var(--accent)}
+.tw{overflow-x:auto;margin:1rem 0}
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+th,td{padding:.5rem .7rem;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+td:first-child,th:first-child{white-space:normal}
+tbody tr:hover{background:var(--code)}
+footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.85rem}
+</style>
+</head><body><main>
+${out.join('\n')}
+<footer>Generated ${generated} from <a href="https://github.com/javidjamae/AntiSlop">javidjamae/AntiSlop</a>. Reproduce with <code>npm run corpus</code>.</footer>
+</main></body></html>
+`
+}
+
+/**
  * Mirror the CLI's document handling: split frontmatter off the body and lint
  * `title`/`description` as their own surfaces.
  *
@@ -690,6 +779,14 @@ function cmdReport() {
     }
   }
 
+  // Stamped so a monthly run always produces a diff, which is what makes the
+  // scheduled PR evidence that the harness ran rather than silence that could
+  // equally mean it broke. The NUMBERS are deterministic for a given pin; this
+  // line is the only part that moves between identical runs.
+  const generated = new Date().toISOString().slice(0, 10)
+  md.splice(1, 0, '', `_Generated ${generated} by \`npm run corpus\`._`)
+
+  writeFileSync(join(CORPUS, 'report.html'), renderHtml(md.join('\n'), generated))
   writeFileSync(join(CORPUS, 'REPORT.md'), md.join('\n'))
   writeFileSync(
     join(CORPUS, 'report.json'),
