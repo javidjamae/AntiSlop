@@ -29,8 +29,8 @@ held constant. Documents with at least one finding:
 
 | Profile | Human pair | Machine | Separation |
 |---|--:|--:|--:|
-| NEUTRAL | 5.1% | 23.6% | 18.5 points |
-| STRICT | 19.6% | 33.2% | 13.6 points |
+| NEUTRAL | 7.6% | 35.0% | 27.4 points |
+| STRICT | 22.8% | 43.0% | 20.2 points |
 
 Per-rule lift, meaning the STRICT rate on machine text divided by the rate on
 its human pair. Above 1 is the only evidence that a rule responds to
@@ -38,11 +38,11 @@ authorship rather than to subject matter.
 
 | Rule | Lift | Reading |
 |---|--:|---|
-| `banned phrase` | 9.6x | The vocabulary list does nearly all of the detection work |
-| `contrast-slop` | 1.7x | Real but modest |
-| `em-dash` | 1.7x | Real but modest, and still too noisy on human prose to default on |
-| `reversed-antithesis` | 0.4x | Fires MORE on human writing. A second, independent reason it defaults off |
-| `ellipsis` | 0.1x | Fires ten times more on human writing |
+| `banned phrase` | 6.9x | The vocabulary list does nearly all of the detection work |
+| `em-dash` | 1.6x | Real but modest, and still too noisy on human prose to default on |
+| `contrast-slop` | 1.5x | Real but modest |
+| `reversed-antithesis` | 0.7x | Fires MORE on human writing. A second, independent reason it defaults off |
+| `ellipsis` | 0.1x | Fires nearly eight times more on human writing |
 | `invisible-unicode` | 0.0x | Model output is typographically clean. This rule catches a provenance problem rather than an authorship tell |
 | `reveal-shape` | no hits | Fires on neither side. These corpora hold no content-marketing writing, which is the only register the shape appears in |
 
@@ -54,7 +54,7 @@ plain-text corpora at all and are judged on the table below instead.
 
 ## Measured precision
 
-Rates below are findings per 1,000 lines against 101,000 lines of human prose
+Rates below are findings per 1,000 lines against 101,400 lines of human prose
 pinned to revisions predating the generated web, under STRICT. Reproduce with
 `npm run corpus`; method and sources are in [corpus/README.md](corpus/README.md)
 and the current numbers in [corpus/REPORT.md](corpus/REPORT.md).
@@ -67,8 +67,8 @@ matching English rather than machine authorship, and belongs off by default.
 
 | Rule | Target | Control | Default | Reading |
 |---|--:|--:|---|---|
-| `em-dash` | 4.09 | 37.88 | off | The control rate is a fact about Victorian typography, and the reason off is the only honest setting |
-| `invisible-unicode` | 2.99 | 0.03 | always | Genuine hits, mostly U+00A0. A no-break space in running prose is an artifact worth seeing |
+| `em-dash` | 4.10 | 37.88 | off | The control rate is a fact about Victorian typography, and the reason off is the only honest setting |
+| `invisible-unicode` | 3.00 | 0.03 | always | Genuine hits, mostly U+00A0. A no-break space in running prose is an artifact worth seeing |
 | `ellipsis` | 1.45 | 0.87 | off | Fires on enumeration and quoted ranges as much as on drama |
 | `reversed-antithesis` | 1.22 | 2.77 | off | Most hits are content-bearing (`a JSON number, not a string`) |
 | `banned phrase` | 0.82 | 0.51 | always | Concentrated in a few entries; the report names them |
@@ -80,7 +80,7 @@ matching English rather than machine authorship, and belongs off by default.
 | `bold-overuse` | 0.05 | 0.00 | on | |
 | `demonstrative-heading` | 0.02 | 0.00 | on | |
 | `emoji-decoration` | 0.02 | 0.00 | on | |
-| `reveal-shape` | 0.00 | 0.00 | on | No hits in 101,511 lines |
+| `reveal-shape` | 0.00 | 0.00 | on | No hits in 101,410 lines |
 
 Every default-on rule sits at or below 0.21 per 1,000 lines on the target
 register. `invisible-unicode` is higher and always on, and its hits are real.

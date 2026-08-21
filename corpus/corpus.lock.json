@@ -22,7 +22,7 @@
       "license": "CC-BY-4.0",
       "resolved": "fb6d636f14b1290afd2f16e21085d5523382680c",
       "resolvedDate": "2021-12-30T22:40:15Z",
-      "files": 60,
+      "files": 54,
       "detail": "kubernetes/website@fb6d636f14",
       "dirs": [
         {
@@ -37,7 +37,7 @@
       "license": "CC-BY-SA-2.5",
       "resolved": "b619806124edb1e36ed3a68066e01b810db81d05",
       "resolvedDate": "2021-12-30T20:01:04Z",
-      "files": 60,
+      "files": 59,
       "detail": "mdn/content@b619806124",
       "dirs": [
         {
@@ -244,7 +244,7 @@
       "kind": "github-paired",
       "license": "CC-BY-3.0",
       "resolved": "86ebd72590556a81622986fab736ab9227a948af",
-      "files": 600,
+      "files": 597,
       "detail": "12/12 domain/variant sets",
       "dirs": [
         {

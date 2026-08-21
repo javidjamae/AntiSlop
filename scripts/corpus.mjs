@@ -86,10 +86,48 @@ function sample(list, n) {
   return Array.from({ length: n }, (_, i) => sorted[Math.floor(i * stride)])
 }
 
+/**
+ * Does this read like running prose?
+ *
+ * A backstop for the class of mistake that a path filter cannot catch: a
+ * source directory quietly containing something that is not writing. The
+ * logprobs incident was caught by eye AFTER a report shipped, which is the
+ * wrong order, so the harness now checks its own inputs.
+ *
+ * Prose has sentences. Token dumps, CSVs and coordinate lists have short
+ * uniform lines and few sentence terminators.
+ */
+function looksLikeProse(text) {
+  const body = text.replace(/^---\n[\s\S]*?\n---\n/, '')
+  const lines = body.split('\n').filter((l) => l.trim())
+  if (!lines.length) return false
+
+  // A generic words-per-line average was the first attempt and it was wrong:
+  // it rejected a real Rust Book chapter whose bullet list dragged the mean
+  // down. Target the actual failure mode instead. A token dump is a column of
+  // `<token> <number>` pairs, which running prose essentially never is.
+  const tabular = lines.filter((l) => /^\s*\S+\s+-?\d*\.?\d+\s*$/.test(l)).length
+  if (tabular / lines.length > 0.5) return false
+
+  // And reject documents with no actual sentences: a section stub that is
+  // frontmatter plus a title contributes a filename to the corpus and nothing
+  // to the measurement.
+  const words = body.split(/\s+/).filter(Boolean).length
+  const sentences = (body.match(/[.!?]["')\]]?(\s|$)/g) ?? []).length
+  return words >= 40 && sentences >= 2
+}
+
+const rejected = []
+
 function cacheWrite(sourceId, name, text) {
+  if (!looksLikeProse(text)) {
+    rejected.push(`${sourceId}/${name}`)
+    return false
+  }
   const dir = join(CACHE, sourceId)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, name.replace(/[^\w.-]/g, '_')), text)
+  return true
 }
 
 // ---------- fetchers, one per source kind ----------
@@ -108,8 +146,7 @@ async function fetchGithub(src, cutoff) {
 
   let files = 0
   for (const p of paths) {
-    cacheWrite(src.id, p, await getText(`https://raw.githubusercontent.com/${src.repo}/${sha}/${p}`, UA))
-    files++
+    if (cacheWrite(src.id, p, await getText(`https://raw.githubusercontent.com/${src.repo}/${sha}/${p}`, UA))) files++
   }
   return { resolved: sha, resolvedDate: date, files, detail: `${src.repo}@${sha.slice(0, 10)}` }
 }
@@ -132,7 +169,7 @@ async function fetchWikipedia(src, cutoff) {
       continue
     }
     const raw = await getText(`https://en.wikipedia.org/w/index.php?oldid=${rev.revid}&action=raw`, UA)
-    cacheWrite(src.id, `${title}.wiki`, stripWikitext(raw))
+    if (!cacheWrite(src.id, `${title}.wiki`, stripWikitext(raw))) continue
     revisions[title] = { revid: rev.revid, timestamp: rev.timestamp }
     files++
   }
@@ -158,8 +195,7 @@ async function fetchGutenberg(src) {
       console.warn(`  ! gutenberg: could not fetch ${book.id} (${book.title})`)
       continue
     }
-    cacheWrite(src.id, `${book.id}-${book.title}.txt`, stripGutenbergBoilerplate(text))
-    files++
+    if (cacheWrite(src.id, `${book.id}-${book.title}.txt`, stripGutenbergBoilerplate(text))) files++
   }
   return { resolved: src.books.map((b) => b.id), files, detail: `${files} books` }
 }
@@ -195,7 +231,14 @@ async function fetchGithubPaired(src) {
         missing.push(`${domain}/${variant}: ${e.message}`)
         continue
       }
-      const blobs = tree.tree.filter((t) => t.type === 'blob' && t.path.endsWith('.txt')).map((t) => t.path)
+      // The `exclude` guard is not optional decoration. Recursing for `.txt`
+      // pulled ghostbuster's logprobs/ subdirectories, which hold token/float
+      // pairs rather than prose, and they took 33 to 40 of every 50 sampled
+      // slots in the essay and wp sets. The linter measured them as English.
+      const skip = src.exclude ? new RegExp(src.exclude) : null
+      const blobs = tree.tree
+        .filter((t) => t.type === 'blob' && t.path.endsWith('.txt') && !(skip && skip.test(t.path)))
+        .map((t) => t.path)
       if (!blobs.length) {
         missing.push(`${domain}/${variant}: no .txt blobs in subtree`)
         continue
@@ -203,12 +246,11 @@ async function fetchGithubPaired(src) {
       const paths = sample(blobs, src.sample)
       const dir = `${src.id}-${domain}-${variant}`
       for (const p of paths) {
-        cacheWrite(
-          dir,
-          p,
-          await getText(`https://raw.githubusercontent.com/${src.repo}/${src.ref}/${domain}/${variant}/${p}`, UA)
+        const body = await getText(
+          `https://raw.githubusercontent.com/${src.repo}/${src.ref}/${domain}/${variant}/${p}`,
+          UA
         )
-        files++
+        if (cacheWrite(dir, p, body)) files++
       }
       if (paths.length) dirs.push({ dir, role, label: `${domain}/${variant}`, pair: domain })
     }
@@ -259,6 +301,10 @@ async function fetchHfPaired(src) {
       const h = pick(src.humanField)
       const m = pick(src.machineField)
       if (!h?.trim() || !m?.trim()) continue
+      // Both sides or neither: a half-written pair would put a human
+      // document in the corpus with no machine counterpart, quietly skewing
+      // the very comparison this source exists to make.
+      if (!looksLikeProse(h.trim()) || !looksLikeProse(m.trim())) continue
       const n = String(got).padStart(4, '0')
       cacheWrite(dirs.human, `${n}.txt`, h.trim())
       cacheWrite(dirs.machine, `${n}.txt`, m.trim())
@@ -335,6 +381,12 @@ async function cmdFetch() {
   // Loud, last, and in the lock. A partial corpus still produces a report
   // that looks finished, so the shortfall has to be visible in the artifact
   // rather than in scrollback.
+  if (rejected.length) {
+    lock.rejectedNonProse = rejected.length
+    console.log(`\n${rejected.length} file(s) rejected by the prose guard:`)
+    for (const r of rejected.slice(0, 8)) console.log(`  ${r}`)
+    if (rejected.length > 8) console.log(`  ... and ${rejected.length - 8} more`)
+  }
   const broken = Object.entries(lock.sources).filter(([, s]) => s.error || s.missing?.length)
   if (broken.length) {
     console.log('\n' + '='.repeat(60))

@@ -156,7 +156,8 @@
       "generator": "gpt-3.5-turbo and Claude, 2023",
       "register": "student essays, Reuters news, creative writing",
       "role": "paired",
-      "why": "The benchmark from Ghostbuster (NAACL 2024), hosted as plain text files on GitHub, so it uses the same pinned-SHA fetch path as the human sources rather than a second hosting dependency. Human sides are IvyPanda essays, the Reuters 50-50 authorship set, and the top r/WritingPrompts posters collected October 2022, which is before ChatGPT was public. Paired by prompt across variants. The paper describes five prompting strategies; the release does not document which folder is which, so gpt_prompt1 is labeled only as an alternate prompting strategy."
+      "why": "The benchmark from Ghostbuster (NAACL 2024), hosted as plain text files on GitHub, so it uses the same pinned-SHA fetch path as the human sources rather than a second hosting dependency. Human sides are IvyPanda essays, the Reuters 50-50 authorship set, and the top r/WritingPrompts posters collected October 2022, which is before ChatGPT was public. Paired by prompt across variants. The paper describes five prompting strategies; the release does not document which folder is which, so gpt_prompt1 is labeled only as an alternate prompting strategy. The repo also ships per-document token logprobs as .txt under logprobs/ subdirectories, which are not prose; the exclude pattern keeps them out and the prose guard in cacheWrite is the backstop.",
+      "exclude": "(^|/)logprobs(/|_)"
     }
   ],
   "slopCaveats": [

@@ -5,6 +5,15 @@ the Unreleased section, syncs `package.json` and `src/version.ts`, and tags,
 all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
+- Fix (corpus harness): the ghostbuster fetcher recursed for `.txt` and pulled
+  that repo's `logprobs/` subdirectories, which hold token and float pairs
+  rather than prose. They took 33 to 40 of every 50 sampled slots in the essay
+  and creative-writing sets, and the linter measured them as English. Excluded
+  by pattern, with a prose guard in the cache writer as the backstop for the
+  next source that hides something similar. Correcting it RAISED the measured
+  separation from 18.5 to 27.4 points, because the dumps had been inflating the
+  line count while contributing no findings.
+
 - Fix (corpus harness): several ways the report could overstate its own
   coverage. A missing `corpus.lock.json` dropped every paired source and still
   exited 0, publishing a detection headline of `0.0% | 0.0% | 0.0 points`; it
