@@ -6,6 +6,10 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.4.0 (2026-08-21)
+
 Upgrading from 0.3.1 will surface MORE findings on prose that previously
 passed, for three reasons: a new rule that defaults on, about fifteen new
 vocabulary entries, and apostrophe handling that lets the existing rules see
