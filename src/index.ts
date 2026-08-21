@@ -38,6 +38,10 @@ export interface RuleSet {
   headingDependentOpener: boolean
   /** Non-question H2/H3 headings ending on a bare it/this/that. */
   demonstrativeHeading: boolean
+  /** The reveal shape: "what nobody tells you", "the part everyone skips".
+   *  Teases the point instead of stating it, and casts the reader as the one
+   *  getting it wrong. Near-zero legitimate use, so it defaults on. */
+  revealShape: boolean
 }
 
 /** Conservative defaults: rules that false-positive legitimate human writing
@@ -55,6 +59,7 @@ export const NEUTRAL: RuleSet = {
   reversedAntithesis: false,
   headingDependentOpener: true,
   demonstrativeHeading: true,
+  revealShape: true,
 }
 
 /** Everything on. Warn-tier mindset: read each hit; a strict profile is for
@@ -72,6 +77,7 @@ export const STRICT: RuleSet = {
   reversedAntithesis: true,
   headingDependentOpener: true,
   demonstrativeHeading: true,
+  revealShape: true,
 }
 
 // Overused AI openers — matched at line start OR after ". ", so they're caught
@@ -114,11 +120,68 @@ export const DEFAULT_BANNED_PHRASES = [
   'i hope this helps', 'let me know if you', 'would you like me to',
   // Knowledge-cutoff leakage
   'knowledge cutoff', 'my training data', 'as of my last',
+  // Social-post cadence: the beat that asks the reader to be impressed.
+  // Drawn from t0ddharris/slopster (MIT).
+  'let that sink in', 'read that again', 'and that changes everything',
+  'imagine a world where', 'in the realm of', 'paradigm shift',
+  'unleash the power of', 'unleash the potential of',
+  // Closing filler, same family as "in conclusion"
+  'at the end of the day', 'all things considered', 'in the final analysis',
+  // Marketing puffery, same family as "boasts"/"breathtaking"
+  'best-in-class', 'world-class', 'next-generation',
+  "in today's fast-paced world", 'in today’s fast-paced world',
+  "in today's digital age", 'in today’s digital age',
 ]
+
+/**
+ * Opt-in vocabulary, deliberately NOT in the defaults. These are ordinary
+ * professional English that LLMs happen to overuse: banning `leverage` or
+ * `comprehensive` outright would make the linter grade writing QUALITY rather
+ * than flag machine authorship, which is the line this tool holds. A site that
+ * wants the stricter voice opts in per repo with `"phrasePacks": ["aggressive"]`.
+ *
+ * Sourced from t0ddharris/slopster's JargonSwaps and WeakWords (MIT). Its
+ * bare intensifiers (`very`, `clearly`, `obviously`) and personal-tic entries
+ * (`quiet\w*`, `sharp\w*`, `drift`, `lands`) are left out on purpose: a rule
+ * that fires on every word starting with "sharp" teaches writers to ignore the
+ * linter, which costs more than the tell it catches.
+ */
+export const AGGRESSIVE_PHRASES = [
+  'utilize', 'utilise', 'leverage', 'facilitate', 'comprehensive',
+  'innovative', 'groundbreaking', 'holistic', 'transformative',
+  'multifaceted', 'nuanced', 'synergy', 'bolster', 'unveil', 'streamline',
+  'elucidate', 'ascertain', 'endeavour', 'foster', 'unleash',
+  'full potential', 'at its core', 'that being said', 'to put it simply',
+  'this begs the question',
+]
+
+/** Named phrase packs a config opts into by name. See AGGRESSIVE_PHRASES. */
+export const PHRASE_PACKS: Record<string, string[]> = {
+  aggressive: AGGRESSIVE_PHRASES,
+}
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+// ---------- reveal shape ----------
+
+// The "here is the hidden truth / what you are getting wrong" framing.
+// Generalized from t0ddharris/slopster's Openers.yml (MIT), which lists the
+// same families as fixed tokens; these four regexes cover its list and the
+// rewordings a token match misses.
+const NOBODY = `(?:nobody|no one|noone|most people|everyone|people|they)`
+const REVEAL_VERB = `(?:tells?|telling|talks? about|says?|mentions?|warns?|knows?|gets? wrong|miss(?:es)?|skips?|overlooks?|ignores?|forgets?)`
+export const REVEAL_SHAPE: RegExp[] = [
+  // "what nobody tells you", "the part everyone skips", "the thing people miss"
+  new RegExp(`\\b(?:what|the (?:thing|part|bit|secret)|the (?:one )?thing)\\s+(?:that\\s+)?${NOBODY}\\s+(?:really\\s+|actually\\s+|ever\\s+)?${REVEAL_VERB}`, 'i'),
+  // "nobody tells you", "no one warns you about"
+  new RegExp(`\\b(?:nobody|no one|noone)\\s+(?:ever\\s+)?(?:tells|warns|talks to|prepares)\\s+you\\b`, 'i'),
+  // "this is the thing everyone gets wrong", "that's the part people skip"
+  new RegExp(`\\b(?:this|that|it)(?:'s|\\s+is)\\s+the\\s+(?:thing|part|bit|secret)\\s+(?:that\\s+)?${NOBODY}\\b`, 'i'),
+  // "what they don't tell you", "what they never mention"
+  new RegExp(`\\bwhat\\s+${NOBODY}\\s+(?:don'?t|doesn'?t|won'?t|never)\\s+${REVEAL_VERB}`, 'i'),
+]
 
 // ---------- invisible / nonstandard unicode ----------
 
@@ -366,7 +429,16 @@ export function lint(
     // contraction form can also match "not just X, but Y"), so hits are
     // deduped by span — one report per stretch of text.
     if (rules.contrastSlop) {
-      const reassert = /(?:\b(?:is|are|was|were)\s+not\b|\b(?:is|are|was|were)n'?t\b|(?:'s|'re)\s+not\b)[^.;:!?]{0,60}[.;:!?]\s+(?:it|that|this|they)(?:\s+(?:is|are)|'s|'re)\b/i
+      // The negation side accepts the copulas AND the do/modal auxiliaries
+      // ("doesn't expire", "don't help", "can't scale"); the reassertion side
+      // stays restricted to a COPULA or auxiliary follow-up, because that is
+      // what makes the shape a reassertion of identity rather than two
+      // ordinary sentences. Widening the follow-up to any lexical verb ("It
+      // leaks.", "They amplify the outage.") is what a token list does, and it
+      // swallows plain technical prose. Recall limit noted in RULES.md.
+      const NEG = `(?:\\b(?:is|are|was|were|do|does|did|can|could|would|will|has|have|had)\\s+not\\b|\\b(?:is|are|was|were|do|does|did|ca|could|would|wo|has|have|had)n'?t\\b|\\bcannot\\b|(?:'s|'re)\\s+not\\b)`
+      const REASSERT = `(?:it|that|this|they|these|those)(?:\\s+(?:is|are|was|were|does|do|did|will|can)|'s|'re)\\b`
+      const reassert = new RegExp(`${NEG}[^.;:!?]{0,60}[.;:!?]\\s+${REASSERT}`, 'i')
       const consequence = /\b(?:is|are)\s+not\s+[^,.;]{1,30},\s+(?:and\s+)?(?:until|unless)\b/i
       // The comma forms, mirrored from a production linter tuned on real copy: the
       // 60-char cap and the no-sentence-punctuation middle keep a match inside
@@ -390,6 +462,21 @@ export function lint(
       const reversed = /,\s+(?:not|never)\s+(?:just\s+)?[^,;:.!?]{2,70}(?=[,.!?;:]|$)/gi
       while ((m = reversed.exec(line))) {
         push(li, m.index, 'reversed-antithesis', 'Trailing "X, not Y" contrast. Delete the contrast: if no information is lost it was a flourish — cut it. Keep it only when the contrast IS the point.')
+      }
+    }
+
+    // The reveal shape: the sentence withholds its point and sells the
+    // withholding ("what nobody tells you", "the part everyone skips"). It
+    // survives rewording, which is why a phrase list does not catch it, and it
+    // casts the reader as the one getting it wrong. Patterns are tried in
+    // order and only the first hit on a line reports, since the families
+    // overlap ("the thing everyone gets wrong" matches two of them).
+    if (rules.revealShape) {
+      for (const re of REVEAL_SHAPE) {
+        if ((m = re.exec(line))) {
+          push(li, m.index, 'reveal-shape', 'Teases the point instead of stating it, and casts the reader as the one getting it wrong. Say the thing directly.')
+          break
+        }
       }
     }
 

@@ -6,6 +6,32 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
+- New rule `reveal-shape` (`revealShape`, on in NEUTRAL): the tease framing
+  that withholds its point and sells the withholding, and casts the reader as
+  the one getting it wrong.
+  Examples: `what nobody tells you`, `the part everyone skips`,
+  `this is the thing everyone gets wrong`.
+  It survives rewording, so a phrase list does not reach it.
+- Fix: `contrast-slop` missed the `do`/modal negations (`doesn't expire`,
+  `don't help`, `can't tune`, `cannot preempt`) and past-copula reassertions
+  (`It was a rename`), because both sides of the pattern accepted only
+  `is|are|was|were`. A bare lexical verb after the pronoun (`It leaks.`) stays
+  unmatched on purpose; RULES.md states the limit.
+- Default vocabulary gains the social-post and puffery tier:
+  `let that sink in`, `read that again`, `imagine a world where`,
+  `in the realm of`, `paradigm shift`, `unleash the power of`,
+  `at the end of the day`, `best-in-class`, `world-class`,
+  `next-generation`, and the `in today's` variants.
+- New opt-in vocabulary packs. `"phrasePacks": ["aggressive"]` in config, or
+  `--pack=aggressive` on the CLI, appends a second tier (`leverage`,
+  `utilize`, `comprehensive`, `foster`, `nuanced`) that is ordinary
+  professional English rather than a machine-authorship tell, so it stays out
+  of the defaults. An unknown pack name exits 2, matching the unknown-rule
+  behavior. Pack entries honor `bannedPhrases.remove`.
+- Attribution added for [Slopster](https://github.com/t0ddharris/slopster)
+  (MIT), the source of the reveal-shape families and much of the new
+  vocabulary.
+
 - Fix: an unrecognized key in the config's `rules` map was silently ignored, so
   a config written from the printed rule IDs (`reversed-antithesis` rather than
   `reversedAntithesis`) looked applied, changed no exit code, and left the rule

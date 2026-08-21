@@ -20,6 +20,7 @@
 | `bold-overuse` | `boldOveruse` | 3+ bold spans in one paragraph (table rows exempt) | on | on |
 | `heading-dependent-opener` | `headingDependentOpener` | A section's first sentence opening on a bare referring word whose antecedent is the heading | on | on |
 | `demonstrative-heading` | `demonstrativeHeading` | Non-question H2/H3 ending on a bare "it"/"this"/"that" | on | on |
+| `reveal-shape` | `revealShape` | The tease framing: `what nobody tells you`, `the part everyone skips`, `this is the thing everyone gets wrong`, `what they never mention`. Withholds the point, sells the withholding, and casts the reader as the one getting it wrong | on | on |
 
 Precision notes, from sweeping the rules over a real published corpus before
 they shipped anywhere:
@@ -34,6 +35,20 @@ they shipped anywhere:
   Frame Rates and When to Use Them`). Known residual false positive: a
   mid-heading antecedent (`Replace audio with silence instead of removing
   it`), which needs parsing rather than a regex.
+
+- `contrast-slop` accepts copula and auxiliary negations on the left
+  (`isn't`, `doesn't`, `can't`, `cannot`) but requires a copula or auxiliary on
+  the reassertion side. A bare lexical verb after the pronoun (`The cache
+  doesn't expire. It leaks.`) is the same rhetorical shape and is left alone on
+  purpose: matching any verb there swallows ordinary two-sentence technical
+  prose, which is a worse trade than missing the hit. A token-list linter
+  catches those two cases and pays for them elsewhere.
+
+- `reveal-shape` keys on words that are ordinary in isolation (`part`,
+  `everyone`, `most people`, `tells`), so each pattern requires the full
+  tease construction rather than the trigger word. `The part number is on the
+  case`, `Everyone can deploy to staging`, and `Nobody owns this table` stay
+  clean; the test suite pins all three.
 
 - `invisible-unicode` deliberately ignores the code/quote exemptions the other
   rules honor: a hidden character inside a code block is more suspicious, not
@@ -50,6 +65,32 @@ also accepts the rule ID itself as an alias: `"arrow-symbol": false` and
 `"arrows": false` both work. An unrecognized name exits 2 with the list of
 valid names rather than being silently ignored, because a config that looks
 applied while doing nothing is the worst outcome available here.
+
+## Vocabulary packs
+
+The default phrase list holds vocabulary with a low rate in human writing and
+a high rate in generated text: `delve`, `tapestry`, `testament to`,
+`let that sink in`. Those earn a default-on ban because flagging one is almost
+always right.
+
+A second tier exists and ships opt-in, as `PHRASE_PACKS.aggressive`:
+
+```json
+{ "phrasePacks": ["aggressive"] }
+```
+
+or `--pack=aggressive` for a one-off run. It holds `leverage`, `utilize`,
+`comprehensive`, `foster`, `streamline`, `nuanced`, and their neighbors. Those
+are ordinary professional English that models overuse. Banning them grades
+writing QUALITY rather than flagging machine authorship, which is a voice
+choice each repo makes rather than a default this linter imposes. Pack entries
+honor `bannedPhrases.remove`, so a site can take the pack and keep one word.
+
+Deliberately excluded from both tiers: bare intensifiers (`very`, `clearly`,
+`obviously`) belong to a general prose linter, and prefix patterns such as
+`quiet\w*` or `sharp\w*` fire on any sentence using an ordinary adjective. A
+rule that noisy teaches writers to skim past the output, which costs more than
+the tell it catches.
 
 ## What this cannot detect, stated plainly
 

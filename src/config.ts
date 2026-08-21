@@ -3,7 +3,14 @@
 // `antislop.config.json` next to its content. The linter is the enforcement
 // half of a voice (what never ships); the generative half (what to write,
 // tone, style guides) belongs in each site's own docs and prompts.
-import { NEUTRAL, STRICT, BANNED_OPENERS, DEFAULT_BANNED_PHRASES, type RuleSet } from './index.js'
+import {
+  NEUTRAL,
+  STRICT,
+  BANNED_OPENERS,
+  DEFAULT_BANNED_PHRASES,
+  PHRASE_PACKS,
+  type RuleSet,
+} from './index.js'
 
 export interface CustomRule {
   /** Reported as `custom: <id>`. */
@@ -24,6 +31,11 @@ export interface AntislopConfig {
    *  edits it — `add` for site-specific voice bans, `remove` for defaults the
    *  site legitimately uses (an API really named "robust", say). */
   bannedPhrases?: string[] | { add?: string[]; remove?: string[] }
+  /** Named vocabulary packs to append, e.g. ["aggressive"]. Opt-in: a pack
+   *  holds ordinary professional English that LLMs overuse, which is a voice
+   *  choice per repo rather than a machine-authorship tell. An unknown pack
+   *  name throws, same as an unknown rule key. */
+  phrasePacks?: string[]
   /** Same shape for the sentence-opener list. */
   openers?: { add?: string[]; remove?: string[] }
   /** Site-specific regex rules. */
@@ -67,6 +79,7 @@ export const RULE_ID_TO_KEY: Record<string, keyof RuleSet> = {
   'reversed-antithesis': 'reversedAntithesis',
   'heading-dependent-opener': 'headingDependentOpener',
   'demonstrative-heading': 'demonstrativeHeading',
+  'reveal-shape': 'revealShape',
 }
 
 /** Rules with no toggle: they have no legitimate prose use and always run. */
@@ -110,13 +123,27 @@ export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
   const base = cfg.profile === 'strict' ? STRICT : NEUTRAL
   const rules: RuleSet = { ...base, ...normalizeRuleOverrides(cfg.rules ?? {}) }
 
+  // Packs resolve BEFORE `bannedPhrases.remove` applies, so a site can opt
+  // into a pack and drop a single entry it legitimately uses.
+  const packed: string[] = []
+  for (const name of cfg.phrasePacks ?? []) {
+    const pack = PHRASE_PACKS[name]
+    if (!pack) {
+      throw new Error(
+        `antislop config: unknown phrase pack "${name}". Valid packs: ${Object.keys(PHRASE_PACKS).sort().join(', ')}.`
+      )
+    }
+    packed.push(...pack)
+  }
+
   let banned: string[]
   if (Array.isArray(cfg.bannedPhrases)) {
-    banned = cfg.bannedPhrases.map((p) => p.toLowerCase())
+    banned = [...cfg.bannedPhrases.map((p) => p.toLowerCase()), ...packed]
   } else {
     const remove = new Set((cfg.bannedPhrases?.remove ?? []).map((p) => p.toLowerCase()))
     banned = [
       ...DEFAULT_BANNED_PHRASES.filter((p) => !remove.has(p)),
+      ...packed.filter((p) => !remove.has(p)),
       ...(cfg.bannedPhrases?.add ?? []).map((p) => p.toLowerCase()),
     ]
   }

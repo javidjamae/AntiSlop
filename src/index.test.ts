@@ -210,6 +210,88 @@ test('config: an always-on rule reports why it cannot be toggled', () => {
   assert.throws(() => resolveConfig({ rules: { 'invisible-unicode': false } as never }), /always on/)
 })
 
+test('reveal-shape fires on the tease families and defaults on', () => {
+  const hits = [
+    'This is the thing everyone gets wrong about queues.',
+    'What nobody tells you is that the retry budget is shared.',
+    'The part everyone skips is the dead-letter queue.',
+    'No one warns you about the cold-start penalty.',
+    "What they don't tell you is the quota resets monthly.",
+    "That's the secret most people miss.",
+  ]
+  for (const h of hits) {
+    assert.ok(rulesOf(h, NEUTRAL).includes('reveal-shape'), h)
+  }
+})
+
+test('reveal-shape leaves ordinary uses of its trigger words alone', () => {
+  // Every line below contains a word the patterns key on (part, everyone,
+  // most people, nobody, tells). A rule that fires here would be worse than
+  // no rule: writers stop reading the output.
+  const clean = [
+    'The part number is printed on the underside of the case.',
+    'Everyone on the team can deploy to staging.',
+    'Most people who hit this are running an older client.',
+    'The dashboard tells you which shard is hot.',
+    'Nobody owns this table, so it never gets vacuumed.',
+    'We skipped the part where the cache warms up.',
+  ]
+  for (const c of clean) {
+    assert.equal(lint(c, STRICT).filter((v) => v.rule === 'reveal-shape').length, 0, c)
+  }
+})
+
+test('reveal-shape reports once per line when families overlap', () => {
+  // "the thing everyone gets wrong" matches the tease family AND the
+  // "this is the thing <nobody>" family; one span, one finding.
+  const v = lint('This is the thing everyone gets wrong.', STRICT)
+  assert.equal(v.filter((x) => x.rule === 'reveal-shape').length, 1)
+})
+
+test('contrast-slop covers do/modal negations and past-copula reassertion', () => {
+  // Regression: the negation side accepted only is/are/was/were, and the
+  // reassertion side only a present copula, so these slipped through.
+  assert.ok(rulesOf("The migration wasn't a rewrite. It was a rename.").includes('contrast-slop'))
+  assert.ok(rulesOf("Retries don't help here. They're the amplifier.").includes('contrast-slop'))
+  assert.ok(rulesOf("The job doesn't retry. It's dropped.").includes('contrast-slop'))
+  assert.ok(rulesOf("You can't tune this. It's a hard limit.").includes('contrast-slop'))
+  assert.ok(rulesOf('The scheduler cannot preempt. It is cooperative.').includes('contrast-slop'))
+})
+
+test('contrast-slop stops at a bare lexical-verb follow-up (deliberate recall limit)', () => {
+  // "The cache doesn't expire. It leaks." is the reassertion SHAPE, but
+  // matching any verb after the pronoun swallows ordinary two-sentence
+  // technical prose. Precision wins; RULES.md states the limit.
+  assert.ok(!rulesOf("The cache doesn't expire. It leaks.").includes('contrast-slop'))
+  assert.ok(!rulesOf("Retries don't help. They amplify the outage.").includes('contrast-slop'))
+})
+
+test('phrase packs: opt-in only, and an unknown name throws', () => {
+  const line = 'We leverage a comprehensive framework to foster synergy.'
+  assert.equal(lint(line, NEUTRAL, resolveConfig({}).banned).length, 0)
+
+  const rc = resolveConfig({ phrasePacks: ['aggressive'] })
+  const hits = lint(line, NEUTRAL, rc.banned).map((v) => v.rule)
+  for (const p of ['leverage', 'comprehensive', 'foster', 'synergy']) {
+    assert.ok(hits.includes(`banned phrase: "${p}"`), p)
+  }
+  // A pack entry a site legitimately uses is still removable.
+  const trimmed = resolveConfig({ phrasePacks: ['aggressive'], bannedPhrases: { remove: ['leverage'] } })
+  assert.ok(!trimmed.banned.includes('leverage'))
+  assert.ok(trimmed.banned.includes('synergy'))
+
+  assert.throws(() => resolveConfig({ phrasePacks: ['nope'] }), /unknown phrase pack/)
+})
+
+test('imported vocabulary is in the defaults, and the tic entries are not', () => {
+  for (const p of ['let that sink in', 'imagine a world where', 'best-in-class', 'paradigm shift']) {
+    assert.ok(rulesOf(`x ${p} y`, NEUTRAL).includes(`banned phrase: "${p}"`), p)
+  }
+  // slopster bans /quiet\w*/ and /sharp\w*/; importing those wholesale would
+  // fire on any sentence using an ordinary adjective.
+  assert.equal(lint('The rollout was quiet and the error budget sharp.', STRICT).length, 0)
+})
+
 test('clean prose is clean', () => {
   assert.equal(lint('How to trim silence from a video', STRICT).length, 0)
 })
