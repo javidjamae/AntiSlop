@@ -80,6 +80,44 @@ One scoping note: a linter is the enforcement half of a voice, the list of thing
 
 Code blocks, inline code, blockquotes, and link URLs are always exempt. Quoted sources legitimately contain em-dashes, and API names legitimately contain words the vocabulary list bans.
 
+## What it checks
+
+Seven categories, sixteen rules. The **NEUTRAL** column is the default profile; every rule listed turns on under `--strict`. [RULES.md](RULES.md) carries the per-rule table, the config key for each, and the precision notes from sweeping the rules over a published corpus before they shipped.
+
+| Category | Rules | Fires on | NEUTRAL |
+|---|---|---|---|
+| Typography | `em-dash`, `ellipsis`, `arrow-symbol`, `horizontal-rule` | `the fix — and there is one — is small`; `and then... silence`; `input → output` in a sentence; a `---` section divider | arrows only |
+| Vocabulary | `banned phrase: *`, `banned opener: *` | `delve`, `seamless`, `testament to`, `in today's landscape`; a sentence starting `Let's dive in`, `Here's why`, or `In this article` | on |
+| Contrast flourishes | `contrast-slop`, `reversed-antithesis` | `It's not luck. It's process.`; `not just fast, but correct`; `we ship weekly, not quarterly` | off |
+| Formatting habits | `inline-header-bullet`, `bold-overuse`, `emoji-decoration` | `- **Speed:** users activate faster`; three or more bold spans in one paragraph; an emoji decorating a heading or bullet | bold and emoji only |
+| Referent problems | `heading-dependent-opener`, `demonstrative-heading` | a section whose first sentence reads `This is where teams fail`; a heading reading `Getting Started With It` | on |
+| Fake formatting and bait | `unicode-bold`, `engagement-bait` | bold faked with unicode math characters; a speech-bubble emoji leading into a question | always |
+| Hidden characters | `invisible-unicode` | zero-width characters, soft hyphens, directional marks, nonstandard spaces, variation-selector runs, and the Unicode tag block | always |
+
+## How this compares
+
+Prose linters already exist, and most of them aim at a different target. Vale, proselint, write-good, alex, and LanguageTool grade writing quality: passive voice, weasel words, readability, grammar, inconsiderate phrasing. A draft can score clean on all of them and still read as machine-written, because the tells sit on a separate axis from quality.
+
+The tools aiming at the same target are the word-list linters (`slop-gate`, `slop-lint`) and the rule packs written for Vale (`Slopster`). Those cover the vocabulary layer well. AntiSlop adds the two layers a word list cannot reach: markdown structure spanning more than one line, and the raw code points underneath the text.
+
+| | AntiSlop | Vale, proselint, write-good | slop-gate, Slopster | GPTZero, Originality.ai |
+|---|---|---|---|---|
+| Target | tells of machine authorship | writing quality and style-guide conformance | tells of machine authorship | probability a human wrote it |
+| Detection layer | words, markdown structure, and code points | words and sentences | words and phrases | statistical classifier |
+| Output | line, rule, and a suggested fix | line and rule | line and rule | a document-level score |
+| Structural rules | heading referents, per-paragraph bold, frontmatter surfaces | style-dependent | no | no |
+| Hidden unicode | yes, including the tag block | no | no | no |
+| Install footprint | Node 20, zero dependencies | Go binary plus style packages; Python; npm tree | zero-dep CLI; Vale plus Bun | hosted, mostly paid |
+| Verdict on a person | never issues one | never issues one | never issues one | central to the product |
+
+Three design choices follow from that.
+
+Findings are deterministic rather than probabilistic. Each one names a rule and a location, so a writer can argue with it and win. AntiSlop makes no claim about who or what produced the text, which is what keeps it usable on your own drafts and keeps it from accusing anybody of anything.
+
+Precision beats recall. Rules with a measured false-positive tail on human writing default off, and RULES.md publishes the tail next to the rule instead of hiding it. A rule that would need a judgment call stays unimplemented on purpose and gets listed as such.
+
+Exemptions are context-aware. Code blocks, inline code, blockquotes, and link URLs are skipped, because quoted sources contain em-dashes and API names contain banned words. Arrows survive in breadcrumb paths and pipeline notation. Zero-width joiners survive inside emoji sequences and in Arabic, Persian, and Indic text, where they are real orthography.
+
 ## What this deliberately does not do
 
 Only high-precision, mechanically detectable tells live here. Patterns that need a judgment call in context stay out of scope, because a regex that guesses at them trains writers to ignore the linter. See [RULES.md](RULES.md) for the full list of implemented rules and the explicit list of unmechanizable ones.
