@@ -9,7 +9,7 @@
 
 A humanization linter that helps you prevent writing AI slop (or human slop, for that matter).
 
-AntiSlop checks prose for the mechanical tells of AI-generated writing: em-dash overuse, dramatic ellipses, arrow glyphs, "Let's dive in" openers, contrast flourishes, mechanical bolding, engagement bait, headings that point at nothing, and a curated list of AI filler vocabulary. It also catches hidden Unicode: zero-width characters, soft hyphens, directional marks, variation-selector runs, and the tag block used for steganography and invisible prompt injection. It is deterministic, dependency-free, and fast enough to run on every commit.
+AntiSlop checks prose for the mechanical tells of AI-generated writing: em-dash overuse, dramatic ellipses, arrow glyphs, "Let's dive in" openers, contrast flourishes, mechanical bolding, engagement bait, headings that point at nothing, and a curated list of AI filler vocabulary. It also catches hidden Unicode: zero-width characters, soft hyphens, directional marks, variation-selector runs, and the tag block, which together form the character-level channel used to watermark text, fingerprint a copy back to its recipient, and smuggle invisible prompt injections. It is deterministic, dependency-free, and fast enough to run on every commit.
 
 This README passes its own strict lint. Run `antislop --strict README.md` to check.
 
@@ -92,7 +92,9 @@ Seven categories, sixteen rules. The **NEUTRAL** column is the default profile; 
 | Formatting habits | `inline-header-bullet`, `bold-overuse`, `emoji-decoration` | `- **Speed:** users activate faster`; three or more bold spans in one paragraph; an emoji decorating a heading or bullet | bold and emoji only |
 | Referent problems | `heading-dependent-opener`, `demonstrative-heading` | a section whose first sentence reads `This is where teams fail`; a heading reading `Getting Started With It` | on |
 | Fake formatting and bait | `unicode-bold`, `engagement-bait` | bold faked with unicode math characters; a speech-bubble emoji leading into a question | always |
-| Hidden characters | `invisible-unicode` | zero-width characters, soft hyphens, directional marks, nonstandard spaces, variation-selector runs, and the Unicode tag block | always |
+| Watermarks and fingerprints | `invisible-unicode` | zero-width characters, soft hyphens, directional marks, nonstandard spaces, variation-selector runs, and the Unicode tag block: the character-level channel that carries watermarks, per-copy fingerprints, and smuggled prompt injections | always |
+
+The watermark row needs one scope note. What a linter can see is the character-level channel: codepoints that survive copy-paste and can carry a watermark, a per-recipient fingerprint, or a hidden instruction aimed at whatever model reads the text next. A variation-selector run is the giveaway shape, since encoded data has to be more than one character long. Statistical watermarks are a different mechanism and out of reach: token-sampling schemes bias which words a model picks, so they leave nothing on the page for a pattern matcher to find, and reading one requires the vendor's key. Any tool claiming to catch those by matching patterns is overclaiming. [RULES.md](RULES.md) states the boundary in full.
 
 ## How this compares
 
@@ -106,7 +108,7 @@ The tools aiming at the same target are the word-list linters (`slop-gate`, `slo
 | Detection layer | words, markdown structure, and code points | words and sentences | words and phrases | statistical classifier |
 | Output | line, rule, and a suggested fix | line and rule | line and rule | a document-level score |
 | Structural rules | heading referents, per-paragraph bold, frontmatter surfaces | style-dependent | no | no |
-| Hidden unicode | yes, including the tag block | no | no | no |
+| Unicode watermarks and fingerprints | yes, including the tag block | no | no | no |
 | Install footprint | Node 20, zero dependencies | Go binary plus style packages; Python; npm tree | zero-dep CLI; Vale plus Bun | hosted, mostly paid |
 | Verdict on a person | never issues one | never issues one | never issues one | central to the product |
 
