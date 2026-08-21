@@ -5,97 +5,82 @@ the Unreleased section, syncs `package.json` and `src/version.ts`, and tags,
 all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
-- Fix (corpus harness): the ghostbuster fetcher recursed for `.txt` and pulled
-  that repo's `logprobs/` subdirectories, which hold token and float pairs
-  rather than prose. They took 33 to 40 of every 50 sampled slots in the essay
-  and creative-writing sets, and the linter measured them as English. Excluded
-  by pattern, with a prose guard in the cache writer as the backstop for the
-  next source that hides something similar. Correcting it RAISED the measured
-  separation from 18.5 to 27.4 points, because the dumps had been inflating the
-  line count while contributing no findings.
 
-- Fix (corpus harness): several ways the report could overstate its own
-  coverage. A missing `corpus.lock.json` dropped every paired source and still
-  exited 0, publishing a detection headline of `0.0% | 0.0% | 0.0 points`; it
-  now exits 2. The cache was never pruned, so a lowered sample size or a
-  renamed source left stale files to be counted by the next run. The lift
-  column rendered "fires only on human text" identically to "never fired",
-  which is what let a reveal-shape false-positive bug read as inert. Retries
-  burned the full backoff ladder on 404s that could never succeed. Paged
-  fetches could skip rows they never requested. And the generated prose
-  hardcoded which rules scored below 1, in a report whose numbers are
-  recomputed monthly.
-- `npm run corpus:fetch` builds first; it imported `dist/` at module scope and
-  died on a clean tree.
+Upgrading from 0.3.1 will surface MORE findings on prose that previously
+passed, for three reasons: a new rule that defaults on, about fifteen new
+vocabulary entries, and apostrophe handling that lets the existing rules see
+text they were blind to. None of that is a false-positive increase; the
+measured rate on human prose is in RULES.md.
 
-- Fix: `reveal-shape` fired on ordinary English. The subject family accepted a
-  bare `people`/`they` and the verb family accepted a bare `says`/`knows`, so
-  `the audit records what people say about the outage` was a finding, on a
-  rule that defaults ON. The subject is now a universal quantifier
-  (`nobody`/`everyone`/`most people`), which is what makes the construction a
-  tease, and `tell` requires its object.
-- Fix: every contraction-bearing rule was blind to the typographic apostrophe
-  (U+2019). `It isn't a rewrite. It's a rename.` was a finding while the
-  smart-quoted form was clean, and the same held for the reveal-shape,
-  banned-opener and banned-phrase families. Since generated prose is
-  smart-quoted far more often than plaintext corpora are, the rules that most
-  need to read model output were the ones that could not. Apostrophes are now
-  straightened before matching, which is index-preserving.
-- Fix: nested banned-phrase entries double-reported one span. The
-  `aggressive` pack bans bare `unleash` while the defaults ban
-  `unleash the power of`, so six words produced two findings. Longest entry
-  wins the span, once.
+### Added
 
-
-- New corpus harness (`npm run corpus`). Measures how often each rule fires on
-  95,000 lines of human prose pinned to revisions predating the generated web,
-  and writes `corpus/REPORT.md`. RULES.md previously claimed its rules had been
-  swept over "a real published corpus" with no corpus in the repo; that claim
-  is now a reproducible command and a table of measured rates. Corpus content
-  is fetched at run time and stays out of the repo. A CI workflow publishes
-  the report on every release. Report only, with no threshold: a gate would turn a judgment call
-  into a merge blocker without improving the judgment.
-- Fix: `contrast-slop` counted a semicolon as a sentence end, so the discourse
-  marker `; that is,` read as a reassertion. The boundary is now
-  sentence-final punctuation.
-- The corpus caught the `contrast-slop` widening below over-firing on human
-  technical prose, and the negation side was pulled back before release. See
-  RULES.md.
-
-- New rule `reveal-shape` (`revealShape`, on in NEUTRAL): the tease framing
-  that withholds its point and sells the withholding, and casts the reader as
-  the one getting it wrong.
+- New rule `reveal-shape` (config key `revealShape`, on in NEUTRAL). The tease
+  framing that withholds its point and sells the withholding, and casts the
+  reader as the one getting it wrong.
   Examples: `what nobody tells you`, `the part everyone skips`,
   `this is the thing everyone gets wrong`.
-  It survives rewording, so a phrase list does not reach it.
-- Fix: `contrast-slop` missed the `do`/modal negations (`doesn't expire`,
-  `don't help`, `can't tune`, `cannot preempt`) and past-copula reassertions
-  (`It was a rename`), because both sides of the pattern accepted only
-  `is|are|was|were`. A bare lexical verb after the pronoun (`It leaks.`) stays
-  unmatched on purpose; RULES.md states the limit.
+  It survives rewording, so a phrase list does not reach it. Generalized from
+  [Slopster](https://github.com/t0ddharris/slopster)'s `Openers.yml` (MIT).
 - Default vocabulary gains the social-post and puffery tier:
   `let that sink in`, `read that again`, `imagine a world where`,
   `in the realm of`, `paradigm shift`, `unleash the power of`,
   `at the end of the day`, `best-in-class`, `world-class`,
   `next-generation`, and the `in today's` variants.
-- New opt-in vocabulary packs. `"phrasePacks": ["aggressive"]` in config, or
+- Opt-in vocabulary packs. `"phrasePacks": ["aggressive"]` in config, or
   `--pack=aggressive` on the CLI, appends a second tier (`leverage`,
-  `utilize`, `comprehensive`, `foster`, `nuanced`) that is ordinary
-  professional English rather than a machine-authorship tell, so it stays out
-  of the defaults. An unknown pack name exits 2, matching the unknown-rule
-  behavior. Pack entries honor `bannedPhrases.remove`.
-- Attribution added for [Slopster](https://github.com/t0ddharris/slopster)
-  (MIT), the source of the reveal-shape families and much of the new
-  vocabulary.
+  `utilize`, `comprehensive`, `foster`, `nuanced`). Those are ordinary
+  professional English that models overuse, so banning them grades writing
+  QUALITY rather than flagging machine authorship. That is a per-repo voice
+  choice, which is why it stays out of the defaults. An unknown pack name
+  exits 2. Pack entries honor `bannedPhrases.remove`.
+- `PHRASE_PACKS` and `AGGRESSIVE_PHRASES` are exported from the entrypoint.
+- A corpus harness, `npm run corpus`. It measures how often each rule fires on
+  101,000 lines of human prose pinned to revisions predating the generated
+  web, and on generated prose paired with a human treatment of the same
+  prompt. RULES.md previously claimed its rules had been swept over "a real
+  published corpus" with no corpus in the repo; that claim is now a
+  reproducible command and a table of measured rates. Corpus content is
+  fetched at run time and never committed. The report publishes to GitHub
+  Pages, to each release as an asset, and to a monthly draft PR that refreshes
+  the copy in the repo. Report only, with no threshold: a gate would turn a
+  judgment call into a merge blocker without improving the judgment.
 
-- Fix: an unrecognized key in the config's `rules` map was silently ignored, so
-  a config written from the printed rule IDs (`reversed-antithesis` rather than
+### Changed
+
+- `contrast-slop` was retuned against that corpus rather than by eye. It now
+  catches modal negations (`can't`, `won't`, `cannot`) and past-copula
+  reassertions (`It was a rename`), which it previously missed. It deliberately
+  does NOT accept lexical-auxiliary negations (`you do not need to set this
+  field. It is automatically populated` negates an action and then opens a new
+  statement), because accepting them tripled the rate on human technical prose.
+- Apostrophes are straightened before matching. Every contraction-bearing rule
+  was blind to U+2019, so `It isn't a rewrite. It's a rename.` was a finding
+  while the smart-quoted form was clean. Generated prose is smart-quoted far
+  more often than plaintext corpora are, so the rules that most need to read
+  model output were the ones that could not. The transformation is
+  index-preserving, so reported offsets are unchanged.
+- Nested banned-phrase entries report once per span. The `aggressive` pack
+  bans bare `unleash` while the defaults ban `unleash the power of`, so six
+  words used to produce two findings. The longer entry wins.
+- Published tarballs no longer contain `dist/index.test.js`. `files: ['dist']`
+  had been taking the whole directory.
+
+### Fixed
+
+- An unrecognized key in the config's `rules` map was silently ignored, so a
+  config written from the printed rule IDs (`reversed-antithesis` rather than
   `reversedAntithesis`) looked applied, changed no exit code, and left the rule
   on. Rule IDs are now accepted as aliases for their config keys, and a name
   that is neither exits 2 listing the valid ones. Several keys are not a
   mechanical conversion of their ID (`arrow-symbol` is `arrows`,
   `horizontal-rule` is `hrDivider`), so RULES.md now carries a config-key
   column beside each rule ID.
+- `contrast-slop` counted a semicolon as a sentence end, so the discourse
+  marker `; that is,` read as a reassertion. The boundary is now
+  sentence-final punctuation only.
+- `npm run release` never updated the two install pins in the README, so
+  cutting a version left both snippets pointing at the previous one. Nothing
+  caught it, because the old tag resolves and installs fine.
 
 ## 0.3.1 (2026-08-18)
 
