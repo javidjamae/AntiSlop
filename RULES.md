@@ -6,7 +6,7 @@
 |---|---|---|---|---|
 | `unicode-bold` | always on | Bold faked with unicode math characters | always | always |
 | `engagement-bait` | always on | Speech-bubble emoji leading into a question | always | always |
-| `invisible-unicode` | always on | Zero-width characters, soft hyphens, directional marks, nonstandard spaces, variation-selector runs, and the Unicode tag block (a documented steganography and prompt-injection channel) | always | always |
+| `invisible-unicode` | always on | Zero-width characters, soft hyphens, directional marks, nonstandard spaces, variation-selector runs, and the Unicode tag block: the character-level channel for watermarking, per-recipient fingerprinting, and prompt injection | always | always |
 | `em-dash` | `emDash` | Em-dashes in prose | off | on |
 | `ellipsis` | `ellipsis` | `…` or `...` for dramatic effect | off | on |
 | `arrow-symbol` | `arrows` | `→ ⇒ ←` standing in for words (emoji belong to `emoji-decoration`). Universal doc conventions are exempt: breadcrumb/menu paths and pipeline notation (Capitalized tokens on both sides of a `→`) and a leading `←` back-link. A trailing `→` link CTA is a per-site convention: opt in via `arrowExemptions.trailingCta` | on | on |
