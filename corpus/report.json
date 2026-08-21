@@ -1,0 +1,124 @@
+{
+  "cutoff": "2021-12-31T00:00:00Z",
+  "totalLines": 95205,
+  "results": {
+    "rust-book": {
+      "files": 50,
+      "lines": 11413,
+      "words": 80398,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 16,
+          "heading-dependent-opener": 2
+        },
+        "STRICT": {
+          "banned phrase": 16,
+          "em-dash": 18,
+          "reversed-antithesis": 12,
+          "inline-header-bullet": 6,
+          "heading-dependent-opener": 2,
+          "ellipsis": 1
+        }
+      },
+      "register": "long-form technical explanation",
+      "role": "target"
+    },
+    "k8s-concepts": {
+      "files": 60,
+      "lines": 13666,
+      "words": 86292,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 4,
+          "invisible-unicode": 6,
+          "heading-dependent-opener": 3,
+          "arrow-symbol": 4
+        },
+        "STRICT": {
+          "em-dash": 9,
+          "inline-header-bullet": 8,
+          "banned phrase": 4,
+          "contrast-slop": 3,
+          "invisible-unicode": 6,
+          "reversed-antithesis": 11,
+          "heading-dependent-opener": 3,
+          "arrow-symbol": 4,
+          "ellipsis": 1
+        }
+      },
+      "register": "reference documentation",
+      "role": "target"
+    },
+    "mdn-guides": {
+      "files": 60,
+      "lines": 8198,
+      "words": 35200,
+      "counts": {
+        "NEUTRAL": {
+          "invisible-unicode": 120,
+          "bold-overuse": 2,
+          "heading-dependent-opener": 2,
+          "banned opener": 1,
+          "demonstrative-heading": 1
+        },
+        "STRICT": {
+          "em-dash": 37,
+          "invisible-unicode": 120,
+          "ellipsis": 16,
+          "reversed-antithesis": 3,
+          "bold-overuse": 2,
+          "heading-dependent-opener": 2,
+          "contrast-slop": 2,
+          "banned opener": 1,
+          "demonstrative-heading": 1
+        }
+      },
+      "register": "web reference and tutorial",
+      "role": "target"
+    },
+    "wikipedia": {
+      "files": 10,
+      "lines": 3157,
+      "words": 75748,
+      "counts": {
+        "NEUTRAL": {
+          "emoji-decoration": 1,
+          "arrow-symbol": 5,
+          "banned phrase": 4
+        },
+        "STRICT": {
+          "emoji-decoration": 1,
+          "ellipsis": 26,
+          "em-dash": 24,
+          "reversed-antithesis": 10,
+          "contrast-slop": 5,
+          "arrow-symbol": 5,
+          "banned phrase": 4
+        }
+      },
+      "register": "encyclopedic",
+      "role": "target"
+    },
+    "gutenberg": {
+      "files": 5,
+      "lines": 58771,
+      "words": 545577,
+      "counts": {
+        "NEUTRAL": {
+          "banned phrase": 30,
+          "invisible-unicode": 2
+        },
+        "STRICT": {
+          "banned phrase": 30,
+          "reversed-antithesis": 163,
+          "contrast-slop": 19,
+          "em-dash": 2226,
+          "ellipsis": 51,
+          "invisible-unicode": 2
+        }
+      },
+      "register": "literary prose, pre-1930",
+      "role": "control"
+    }
+  }
+}

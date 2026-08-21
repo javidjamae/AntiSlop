@@ -1,0 +1,91 @@
+{
+  "cutoff": "2021-12-31T00:00:00Z",
+  "generated": null,
+  "sources": {
+    "rust-book": {
+      "kind": "github",
+      "license": "MIT OR Apache-2.0",
+      "resolved": "15aef431579a3d2f2bac8cc25445ece1c8e9808c",
+      "resolvedDate": "2021-12-29T16:10:08Z",
+      "files": 50,
+      "detail": "rust-lang/book@15aef43157"
+    },
+    "k8s-concepts": {
+      "kind": "github",
+      "license": "CC-BY-4.0",
+      "resolved": "fb6d636f14b1290afd2f16e21085d5523382680c",
+      "resolvedDate": "2021-12-30T22:40:15Z",
+      "files": 60,
+      "detail": "kubernetes/website@fb6d636f14"
+    },
+    "mdn-guides": {
+      "kind": "github",
+      "license": "CC-BY-SA-2.5",
+      "resolved": "b619806124edb1e36ed3a68066e01b810db81d05",
+      "resolvedDate": "2021-12-30T20:01:04Z",
+      "files": 60,
+      "detail": "mdn/content@b619806124"
+    },
+    "wikipedia": {
+      "kind": "wikipedia",
+      "license": "CC-BY-SA-4.0",
+      "resolved": {
+        "Concurrency (computer science)": {
+          "revid": 1058220100,
+          "timestamp": "2021-12-02T05:21:06Z"
+        },
+        "Database index": {
+          "revid": 1060735574,
+          "timestamp": "2021-12-17T09:56:27Z"
+        },
+        "Public-key cryptography": {
+          "revid": 1059388010,
+          "timestamp": "2021-12-09T04:32:14Z"
+        },
+        "Rust (programming language)": {
+          "revid": 1062190648,
+          "timestamp": "2021-12-26T22:43:50Z"
+        },
+        "Coffee": {
+          "revid": 1062706454,
+          "timestamp": "2021-12-30T01:41:58Z"
+        },
+        "Bicycle": {
+          "revid": 1062365957,
+          "timestamp": "2021-12-28T01:30:54Z"
+        },
+        "Jazz": {
+          "revid": 1062772796,
+          "timestamp": "2021-12-30T12:36:38Z"
+        },
+        "Photosynthesis": {
+          "revid": 1062819171,
+          "timestamp": "2021-12-30T18:46:59Z"
+        },
+        "Roman Republic": {
+          "revid": 1061760036,
+          "timestamp": "2021-12-23T19:59:30Z"
+        },
+        "Volcano": {
+          "revid": 1057492486,
+          "timestamp": "2021-11-27T23:56:11Z"
+        }
+      },
+      "files": 10,
+      "detail": "10 articles at pinned oldids"
+    },
+    "gutenberg": {
+      "kind": "gutenberg",
+      "license": "public domain",
+      "resolved": [
+        1342,
+        2701,
+        1661,
+        174,
+        5200
+      ],
+      "files": 5,
+      "detail": "5 books"
+    }
+  }
+}

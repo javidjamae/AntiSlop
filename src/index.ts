@@ -459,16 +459,26 @@ export function lint(
     // contraction form can also match "not just X, but Y"), so hits are
     // deduped by span — one report per stretch of text.
     if (rules.contrastSlop) {
-      // The negation side accepts the copulas AND the do/modal auxiliaries
-      // ("doesn't expire", "don't help", "can't scale"); the reassertion side
-      // stays restricted to a COPULA or auxiliary follow-up, because that is
-      // what makes the shape a reassertion of identity rather than two
-      // ordinary sentences. Widening the follow-up to any lexical verb ("It
-      // leaks.", "They amplify the outage.") is what a token list does, and it
-      // swallows plain technical prose. Recall limit noted in RULES.md.
-      const NEG = `(?:\\b(?:is|are|was|were|do|does|did|can|could|would|will|has|have|had)\\s+not\\b|\\b(?:is|are|was|were|do|does|did|ca|could|would|wo|has|have|had)n'?t\\b|\\bcannot\\b|(?:'s|'re)\\s+not\\b)`
+      // Both sides are bounded by what the corpus harness measured, not by
+      // what looked reasonable. See corpus/REPORT.md.
+      //
+      // NEGATION: copulas plus can't/won't/cannot. Widening this to the
+      // lexical auxiliaries (`do not need`, `doesn't contribute`) TRIPLED the
+      // rate on human technical prose, because "you do not need to set this
+      // field. It is automatically populated" negates an ACTION and then
+      // starts a new statement. Only an identity or possibility claim gets
+      // reasserted, so only those belong on the left.
+      //
+      // BOUNDARY: sentence-final punctuation only. The old `[.;:!?]` treated
+      // a semicolon as a sentence end, so the discourse marker `; that is,`
+      // read as a reassertion.
+      //
+      // REASSERTION: a copula or auxiliary follow-up. Widening to any lexical
+      // verb ("It leaks.", "They amplify the outage.") is what a token list
+      // does, and it swallows plain two-sentence prose.
+      const NEG = `(?:\\b(?:is|are|was|were)\\s+not\\b|\\b(?:is|are|was|were|ca|wo)n'?t\\b|\\bcannot\\b|(?:'s|'re)\\s+not\\b)`
       const REASSERT = `(?:it|that|this|they|these|those)(?:\\s+(?:is|are|was|were|does|do|did|will|can)|'s|'re)\\b`
-      const reassert = new RegExp(`${NEG}[^.;:!?]{0,60}[.;:!?]\\s+${REASSERT}`, 'i')
+      const reassert = new RegExp(`${NEG}[^.!?]{0,60}[.!?]\\s+${REASSERT}`, 'i')
       const consequence = /\b(?:is|are)\s+not\s+[^,.;]{1,30},\s+(?:and\s+)?(?:until|unless)\b/i
       // The comma forms, mirrored from a production linter tuned on real copy: the
       // 60-char cap and the no-sentence-punctuation middle keep a match inside

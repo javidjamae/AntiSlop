@@ -1,0 +1,62 @@
+name: corpus
+
+# Measures how often each rule fires on human prose written before the
+# generated web, and publishes the result. Report only: this workflow never
+# fails the build on a rate change. The number is evidence for a human
+# deciding which profile a rule belongs in, and a threshold would turn that
+# judgment into a merge blocker without improving the judgment.
+#
+# Runs on release (the report is the artifact that dates a release), monthly
+# (upstream sources move and pins can rot), and on demand.
+
+on:
+  release:
+    types: [published]
+  schedule:
+    - cron: '17 6 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    # Needed only by the release-upload step; every other trigger reads.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - name: Fetch corpus and measure
+        # Corpus content is never committed. Sources are fetched at pinned
+        # pre-cutoff revisions, so two runs a year apart measure the same text.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run corpus
+
+      - name: Summary
+        run: cat corpus/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: corpus-report-${{ github.sha }}
+          path: |
+            corpus/REPORT.md
+            corpus/report.json
+            corpus/corpus.lock.json
+          retention-days: 90
+
+      - name: Attach the report to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            corpus/REPORT.md corpus/report.json corpus/corpus.lock.json --clobber

@@ -24,6 +24,21 @@ all from one commit. The tag is the version consumers pin.
   wins the span, once.
 
 
+- New corpus harness (`npm run corpus`). Measures how often each rule fires on
+  95,000 lines of human prose pinned to revisions predating the generated web,
+  and writes `corpus/REPORT.md`. RULES.md previously claimed its rules had been
+  swept over "a real published corpus" with no corpus in the repo; that claim
+  is now a reproducible command and a table of measured rates. Corpus content
+  is fetched at run time and stays out of the repo. A CI workflow publishes
+  the report on every release. Report only, with no threshold: a gate would turn a judgment call
+  into a merge blocker without improving the judgment.
+- Fix: `contrast-slop` counted a semicolon as a sentence end, so the discourse
+  marker `; that is,` read as a reassertion. The boundary is now
+  sentence-final punctuation.
+- The corpus caught the `contrast-slop` widening below over-firing on human
+  technical prose, and the negation side was pulled back before release. See
+  RULES.md.
+
 - New rule `reveal-shape` (`revealShape`, on in NEUTRAL): the tease framing
   that withholds its point and sells the withholding, and casts the reader as
   the one getting it wrong.

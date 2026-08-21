@@ -22,8 +22,40 @@
 | `demonstrative-heading` | `demonstrativeHeading` | Non-question H2/H3 ending on a bare "it"/"this"/"that" | on | on |
 | `reveal-shape` | `revealShape` | The tease framing: `what nobody tells you`, `the part everyone skips`, `this is the thing everyone gets wrong`, `what they never mention`. Withholds the point, sells the withholding, and casts the reader as the one getting it wrong | on | on |
 
-Precision notes, from sweeping the rules over a real published corpus before
-they shipped anywhere:
+## Measured precision
+
+Rates below are findings per 1,000 lines against 95,000 lines of human prose
+pinned to revisions predating the generated web, under STRICT. Reproduce with
+`npm run corpus`; method and sources are in [corpus/README.md](corpus/README.md)
+and the current numbers in [corpus/REPORT.md](corpus/REPORT.md).
+
+Read the two columns against each other. **Target** is technical documentation
+and encyclopedic writing, the register this linter is pointed at. **Control**
+is pre-1930 literary prose, included precisely because nobody would run a slop
+linter on Moby Dick: a rule that is quiet on target and loud on control is
+matching English rather than machine authorship, and belongs off by default.
+
+| Rule | Target | Control | Default | Reading |
+|---|--:|--:|---|---|
+| `em-dash` | 2.42 | 37.88 | off | The control rate is a fact about Victorian typography, and the reason off is the only honest setting |
+| `ellipsis` | 1.21 | 0.87 | off | Fires on enumeration and quoted ranges as much as on drama |
+| `reversed-antithesis` | 0.99 | 2.77 | off | Most hits are content-bearing (`a JSON number, not a string`) |
+| `invisible-unicode` | 3.46 | 0.03 | always | Genuine hits. Almost all are U+00A0 in one source, and a no-break space in running prose is an artifact worth seeing |
+| `banned phrase` | 0.66 | 0.51 | always | Concentrated in a few entries; the report names them |
+| `inline-header-bullet` | 0.38 | 0.00 | off | A real pattern in edited human docs, which is why it is STRICT-only |
+| `contrast-slop` | 0.27 | 0.32 | off | Tightened against this corpus; see below |
+| `arrow-symbol` | 0.25 | 0.00 | on | Residual: multi-word pipeline stages defeat the capitalized-token exemption |
+| `heading-dependent-opener` | 0.19 | 0.00 | on | |
+| `bold-overuse` | 0.05 | 0.00 | on | |
+| `banned opener` | 0.03 | 0.00 | on | |
+| `demonstrative-heading` | 0.03 | 0.00 | on | |
+| `emoji-decoration` | 0.03 | 0.00 | on | |
+| `reveal-shape` | 0.00 | 0.00 | on | No hits in 95,205 lines |
+
+Every default-on rule sits at or below 0.25 per 1,000 lines on the target
+register. `invisible-unicode` is higher and always on, and its hits are real.
+
+Notes the corpus produced:
 
 - `reversed-antithesis` fires on roughly half of typical technical articles,
   and most hits are content-bearing distinctions (`a JSON number, not a
@@ -36,13 +68,19 @@ they shipped anywhere:
   mid-heading antecedent (`Replace audio with silence instead of removing
   it`), which needs parsing rather than a regex.
 
-- `contrast-slop` accepts copula and auxiliary negations on the left
-  (`isn't`, `doesn't`, `can't`, `cannot`) but requires a copula or auxiliary on
-  the reassertion side. A bare lexical verb after the pronoun (`The cache
-  doesn't expire. It leaks.`) is the same rhetorical shape and is left alone on
-  purpose: matching any verb there swallows ordinary two-sentence technical
-  prose, which is a worse trade than missing the hit. A token-list linter
-  catches those two cases and pays for them elsewhere.
+- `contrast-slop` was tuned against the corpus rather than by eye, and both
+  bounds cost something to find. Accepting the lexical auxiliaries on the
+  negation side (`do not`, `doesn't`, `has not`) tripled the rate on human
+  technical prose: `you do not need to set this field. It is automatically
+  populated` negates an ACTION and then opens a new statement, which is not a
+  reassertion. Only identity and possibility claims get reasserted, so the
+  left side is copulas plus `can't`/`won't`/`cannot`. The boundary is
+  sentence-final punctuation only, because the old class counted a semicolon
+  and read the discourse marker `; that is,` as a reassertion. The right side
+  stays a copula or auxiliary: matching a bare lexical verb (`The cache
+  doesn't expire. It leaks.`) swallows ordinary two-sentence prose.
+  Net against the previous rule set: three shapes gained, and the target-register
+  rate held at 0.27 per 1,000.
 
 - `reveal-shape` keys on words that are ordinary in isolation (`part`,
   `everyone`, `most people`, `tells`), so each pattern requires the full
