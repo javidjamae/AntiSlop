@@ -36,6 +36,11 @@ jobs:
     permissions:
       contents: write # release upload, and the scheduled refresh branch
       pull-requests: write # the scheduled refresh PR
+      # configure-pages with `enablement: true` turns Pages on via the REST
+      # API on first run, and that call needs pages: write on THIS job. Without
+      # it the step fails with a 403 and the site is never created — the exact
+      # manual step the enablement flag exists to avoid.
+      pages: write
     steps:
       - uses: actions/checkout@v4
 
