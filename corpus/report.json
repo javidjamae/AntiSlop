@@ -11,20 +11,23 @@
       "counts": {
         "NEUTRAL": {
           "banned phrase": 16,
-          "heading-dependent-opener": 2
+          "banned opener": 8,
+          "heading-dependent-opener": 3
         },
         "STRICT": {
           "banned phrase": 16,
           "em-dash": 18,
           "reversed-antithesis": 12,
+          "banned opener": 8,
+          "contrast-slop": 2,
           "inline-header-bullet": 6,
-          "heading-dependent-opener": 2,
+          "heading-dependent-opener": 3,
           "ellipsis": 1
         }
       },
       "docsWithFinding": {
-        "NEUTRAL": 13,
-        "STRICT": 27
+        "NEUTRAL": 19,
+        "STRICT": 30
       },
       "sourceId": "rust-book"
     },
@@ -135,7 +138,7 @@
         "STRICT": {
           "banned phrase": 30,
           "reversed-antithesis": 163,
-          "contrast-slop": 19,
+          "contrast-slop": 24,
           "em-dash": 2226,
           "ellipsis": 51,
           "invisible-unicode": 2
@@ -204,21 +207,19 @@
       "lines": 150,
       "counts": {
         "NEUTRAL": {
-          "banned phrase": 2,
-          "reveal-shape": 2
+          "banned phrase": 2
         },
         "STRICT": {
           "ellipsis": 13,
           "banned phrase": 2,
           "contrast-slop": 1,
           "em-dash": 2,
-          "reveal-shape": 2,
           "reversed-antithesis": 2
         }
       },
       "docsWithFinding": {
-        "NEUTRAL": 4,
-        "STRICT": 19
+        "NEUTRAL": 2,
+        "STRICT": 17
       },
       "sourceId": "hc3-eli5"
     },

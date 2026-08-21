@@ -5,6 +5,20 @@ the Unreleased section, syncs `package.json` and `src/version.ts`, and tags,
 all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
+- Fix (corpus harness): several ways the report could overstate its own
+  coverage. A missing `corpus.lock.json` dropped every paired source and still
+  exited 0, publishing a detection headline of `0.0% | 0.0% | 0.0 points`; it
+  now exits 2. The cache was never pruned, so a lowered sample size or a
+  renamed source left stale files to be counted by the next run. The lift
+  column rendered "fires only on human text" identically to "never fired",
+  which is what let a reveal-shape false-positive bug read as inert. Retries
+  burned the full backoff ladder on 404s that could never succeed. Paged
+  fetches could skip rows they never requested. And the generated prose
+  hardcoded which rules scored below 1, in a report whose numbers are
+  recomputed monthly.
+- `npm run corpus:fetch` builds first; it imported `dist/` at module scope and
+  died on a clean tree.
+
 - Fix: `reveal-shape` fired on ordinary English. The subject family accepted a
   bare `people`/`they` and the verb family accepted a bare `says`/`knows`, so
   `the audit records what people say about the outage` was a finding, on a

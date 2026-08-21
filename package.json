@@ -28,7 +28,7 @@
     "prepare": "npm run build",
     "release": "node scripts/release.mjs",
     "corpus": "npm run build && node scripts/corpus.mjs",
-    "corpus:fetch": "node scripts/corpus.mjs fetch",
+    "corpus:fetch": "npm run build && node scripts/corpus.mjs fetch",
     "corpus:report": "npm run build && node scripts/corpus.mjs report"
   },
   "devDependencies": {

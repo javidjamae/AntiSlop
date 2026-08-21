@@ -29,8 +29,8 @@ held constant. Documents with at least one finding:
 
 | Profile | Human pair | Machine | Separation |
 |---|--:|--:|--:|
-| NEUTRAL | 5.6% | 23.6% | 18.0 points |
-| STRICT | 20.0% | 33.2% | 13.2 points |
+| NEUTRAL | 5.1% | 23.6% | 18.5 points |
+| STRICT | 19.6% | 33.2% | 13.6 points |
 
 Per-rule lift, meaning the STRICT rate on machine text divided by the rate on
 its human pair. Above 1 is the only evidence that a rule responds to
@@ -44,6 +44,7 @@ authorship rather than to subject matter.
 | `reversed-antithesis` | 0.4x | Fires MORE on human writing. A second, independent reason it defaults off |
 | `ellipsis` | 0.1x | Fires ten times more on human writing |
 | `invisible-unicode` | 0.0x | Model output is typographically clean. This rule catches a provenance problem rather than an authorship tell |
+| `reveal-shape` | no hits | Fires on neither side. These corpora hold no content-marketing writing, which is the only register the shape appears in |
 
 Every number here is a floor. The public paired corpora are 2022 and 2023
 generators writing essays, news, and answers; none of them is the landing copy
@@ -71,18 +72,22 @@ matching English rather than machine authorship, and belongs off by default.
 | `ellipsis` | 1.45 | 0.87 | off | Fires on enumeration and quoted ranges as much as on drama |
 | `reversed-antithesis` | 1.22 | 2.77 | off | Most hits are content-bearing (`a JSON number, not a string`) |
 | `banned phrase` | 0.82 | 0.51 | always | Concentrated in a few entries; the report names them |
+| `contrast-slop` | 0.35 | 0.41 | off | Tightened against this corpus; see below |
 | `inline-header-bullet` | 0.33 | 0.00 | off | A real pattern in edited human docs, which is why it is STRICT-only |
-| `contrast-slop` | 0.30 | 0.32 | off | Tightened against this corpus; see below |
 | `arrow-symbol` | 0.21 | 0.00 | on | Residual: multi-word pipeline stages defeat the capitalized-token exemption |
-| `heading-dependent-opener` | 0.16 | 0.00 | on | |
+| `banned opener` | 0.21 | 0.00 | on | Rose from 0.02 once apostrophe straightening let `Here’s why` match |
+| `heading-dependent-opener` | 0.19 | 0.00 | on | |
 | `bold-overuse` | 0.05 | 0.00 | on | |
-| `banned opener` | 0.02 | 0.00 | on | |
 | `demonstrative-heading` | 0.02 | 0.00 | on | |
 | `emoji-decoration` | 0.02 | 0.00 | on | |
 | `reveal-shape` | 0.00 | 0.00 | on | No hits in 101,511 lines |
 
 Every default-on rule sits at or below 0.21 per 1,000 lines on the target
 register. `invisible-unicode` is higher and always on, and its hits are real.
+
+Numbers here are pasted from a `npm run corpus` run, so
+[corpus/REPORT.md](corpus/REPORT.md) is the source of truth if the two ever
+disagree.
 
 Notes the corpus produced:
 
@@ -109,7 +114,7 @@ Notes the corpus produced:
   stays a copula or auxiliary: matching a bare lexical verb (`The cache
   doesn't expire. It leaks.`) swallows ordinary two-sentence prose.
   Net against the previous rule set: three shapes gained, and the target-register
-  rate held at 0.27 per 1,000.
+  rate is 0.35 per 1,000 (see the table above).
 
 - `reveal-shape` keys on words that are ordinary in isolation (`part`,
   `everyone`, `most people`, `tells`), so each pattern requires the full

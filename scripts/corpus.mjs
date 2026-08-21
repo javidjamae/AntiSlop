@@ -26,7 +26,7 @@
 // public paired corpora are 2022-2023 generators writing essays, news, and
 // answers. They are not 2026 models writing landing copy, which is the
 // register where slop is thickest and where this linter is aimed.
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { lint, NEUTRAL, STRICT, RULE_ID_TO_KEY } from '../dist/index.js'
@@ -52,17 +52,24 @@ const GH = process.env.GITHUB_TOKEN ? { ...UA, authorization: `Bearer ${process.
 async function get(url, headers = UA, tries = 4) {
   let lastErr
   for (let i = 0; i < tries; i++) {
+    // `fatal` rather than a throw: throwing the not-retryable error from
+    // inside the try lands in this function's own catch, which recorded it as
+    // lastErr and retried anyway. A 404 then cost the full backoff ladder —
+    // and fetchGutenberg deliberately probes a mirror path that 404s for most
+    // books, so every book paid seven seconds before its fallback was tried.
+    let fatal = false
     try {
       const r = await fetch(url, { headers })
       if (r.ok) return r
-      // 403/429 from GitHub is usually a secondary rate limit; 5xx is transient.
-      if (r.status !== 403 && r.status !== 429 && r.status < 500) {
-        throw new Error(`${r.status} ${r.statusText} for ${url}`)
-      }
       lastErr = new Error(`${r.status} ${r.statusText} for ${url}`)
+      // 403/429 from GitHub is usually a secondary rate limit; 5xx is
+      // transient. Everything else is the caller's mistake and will not fix
+      // itself by waiting.
+      fatal = r.status !== 403 && r.status !== 429 && r.status < 500
     } catch (e) {
       lastErr = e
     }
+    if (fatal) break
     if (i < tries - 1) await new Promise((res) => setTimeout(res, 1000 * 2 ** i))
   }
   throw lastErr
@@ -232,11 +239,18 @@ async function fetchHfPaired(src) {
   const dirs = { human: `${src.id}-human`, machine: `${src.id}-machine` }
   const PAGE = 100
   let got = 0
-  for (let offset = 0; got < src.pairs; offset += PAGE) {
+  let offset = 0
+  while (got < src.pairs) {
+    // Advance by what was REQUESTED, not by a fixed page size. Rows can be
+    // skipped by the blank-field guard below, so a short final request used to
+    // leave `offset` past rows that were never asked for, quietly biasing a
+    // sample the docstring calls deterministic.
+    const length = Math.min(PAGE, src.pairs - got)
     const url =
       `https://datasets-server.huggingface.co/rows?dataset=${encodeURIComponent(src.dataset)}` +
       `&config=${encodeURIComponent(src.config)}&split=${encodeURIComponent(src.split)}` +
-      `&offset=${offset}&length=${Math.min(PAGE, src.pairs - got)}`
+      `&offset=${offset}&length=${length}`
+    offset += length
     const page = await getJson(url, UA)
     if (!page.rows?.length) break
     for (const { row } of page.rows) {
@@ -289,6 +303,11 @@ function stripWikitext(text) {
 // ---------- commands ----------
 
 async function cmdFetch() {
+  // Wipe first. Nothing pruned per-source, so lowering a `sample`, renaming a
+  // Wikipedia title, or getting fewer rows on a re-run left the previous run's
+  // files behind to be counted by the next report — which breaks the "same pin
+  // gives the same files on every machine" guarantee `sample()` claims.
+  rmSync(CACHE, { recursive: true, force: true })
   const lock = { cutoff: MANIFEST.cutoff, generated: null, sources: {} }
   for (const src of MANIFEST.sources) {
     process.stdout.write(`fetching ${src.id} ... `)
@@ -382,17 +401,39 @@ function cmdReport() {
     console.error('no corpus cache. run: node scripts/corpus.mjs fetch')
     process.exit(2)
   }
-  const lock = existsSync(LOCK_PATH) ? JSON.parse(readFileSync(LOCK_PATH, 'utf8')) : { sources: {} }
+  // The lock is REQUIRED, not best-effort. Paired sources cache under
+  // `<id>-human`/`<id>-machine`/`<id>-<domain>-<variant>`, none of which is
+  // `<id>`, and their manifest role is the bare "paired" that no scoring group
+  // matches. So without the lock every paired unit silently vanished and the
+  // script still exited 0, publishing a headline detection table reading
+  // `0.0% | 0.0% | 0.0 points`. That is precisely the failure this file's
+  // header calls worse than crashing.
+  if (!existsSync(LOCK_PATH)) {
+    console.error('corpus.lock.json is missing — run: node scripts/corpus.mjs fetch')
+    process.exit(2)
+  }
+  const lock = JSON.parse(readFileSync(LOCK_PATH, 'utf8'))
 
   // A "unit" is one cache directory with a role. Human sources contribute one
   // each; a paired source contributes a human dir and a machine dir per
   // domain, which is what makes the machine-versus-human comparison possible
   // on matched prompts.
   const units = []
+  const absent = []
   for (const src of MANIFEST.sources) {
-    for (const d of lock.sources?.[src.id]?.dirs ?? [{ dir: src.id, role: src.role, label: src.id }]) {
-      if (existsSync(join(CACHE, d.dir))) units.push({ ...d, src })
+    const dirs = lock.sources?.[src.id]?.dirs
+    if (!dirs) {
+      absent.push(`${src.id}: not in the lock`)
+      continue
     }
+    for (const d of dirs) {
+      if (existsSync(join(CACHE, d.dir))) units.push({ ...d, src })
+      else absent.push(`${d.label}: cached files missing`)
+    }
+  }
+  if (absent.length) {
+    console.error('INCOMPLETE CORPUS — the report below understates coverage:')
+    for (const a of absent) console.error(`  ${a}`)
   }
 
   const offenders = {}
@@ -485,16 +526,22 @@ function cmdReport() {
   md.push('')
   md.push('| Rule | Human pair | Machine | Lift |')
   md.push('|---|--:|--:|--:|')
+  // Four distinct cases, and collapsing any two of them hides a real result.
+  // `h>0, m=0` — fires ONLY on human text — used to render as `neither`,
+  // grouped with the rules that had nothing to match. That label is what let a
+  // reveal-shape false-positive bug sit in a published report looking inert
+  // when it was the worst row in the table.
+  const label = (h, m) =>
+    h === 0 && m === 0 ? 'neither fires' : h === 0 ? 'human 0' : m === 0 ? 'MACHINE 0' : `${(m / h).toFixed(1)}x`
   const lifted = allRules
     .map((rule) => {
       const h = per1k(hitsOf(pairedHuman, rule), linesOf(pairedHuman))
       const m = per1k(hitsOf(slop, rule), linesOf(slop))
-      return { rule, h, m, lift: h > 0 ? m / h : m > 0 ? Infinity : 0 }
+      return { rule, h, m, lift: h > 0 ? m / h : m > 0 ? Infinity : -1 }
     })
     .sort((a, b) => b.lift - a.lift || b.m - a.m)
-  for (const { rule, h, m, lift } of lifted) {
-    const l = lift === Infinity ? 'human 0' : lift === 0 ? 'neither' : `${lift.toFixed(1)}x`
-    md.push(`| \`${rule}\` | ${h.toFixed(2)} | ${m.toFixed(2)} | **${l}** |`)
+  for (const { rule, h, m } of lifted) {
+    md.push(`| \`${rule}\` | ${h.toFixed(2)} | ${m.toFixed(2)} | **${label(h, m)}** |`)
   }
   md.push('')
   md.push(
@@ -505,12 +552,29 @@ function cmdReport() {
       'those on the false-positive table below and on the unit fixtures, not here.'
   )
   md.push('')
+  // DERIVED, never hardcoded. An earlier draft named the below-1 rules in a
+  // literal sentence inside a report whose numbers are recomputed on every
+  // monthly run, so the prose was already contradicting its own table.
+  // invisible-unicode is excluded by name: it is a provenance rule, not an
+  // authorship rule, so "narrow it or turn it off" is the wrong prescription
+  // for it. The paragraph below states its case on its own terms.
+  const below = lifted.filter((r) => r.h > 0 && r.m < r.h && r.rule !== 'invisible-unicode')
+  if (below.length) {
+    const worst = below
+      .map((r) => `\`${r.rule}\`${r.m === 0 ? ' (never fires on machine text at all)' : ''}`)
+      .join(', ')
+    md.push(
+      `${below.length === 1 ? 'One rule scores' : `${below.length} rules score`} BELOW 1, meaning ` +
+        `${below.length === 1 ? 'it fires' : 'they fire'} more on the human side: ${worst}. A rule ` +
+        'that fires more on human writing than on generated writing is not detecting authorship, ' +
+        'and either belongs off by default or needs its pattern narrowed.'
+    )
+    md.push('')
+  }
   md.push(
-    'Two rules score BELOW 1, meaning they fire more on the human side: `ellipsis` and ' +
-      '`reversed-antithesis`. Both are already off by default, and this is the second independent ' +
-      'reason for that. `invisible-unicode` is near zero on generated text because model output is ' +
-      'typographically clean; it catches a provenance problem (watermarks, fingerprints, injection) ' +
-      'rather than an authorship tell, which is why it is always on and scored separately.'
+    '`invisible-unicode` is near zero on generated text because model output is typographically ' +
+      'clean. It catches a provenance problem (watermarks, fingerprints, injection) rather than an ' +
+      'authorship tell, which is why it is always on and read separately from this table.'
   )
   md.push('')
   md.push('Caveats that travel with every number above:')

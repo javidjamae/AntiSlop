@@ -35,8 +35,8 @@ Both sides answer the same prompts, so topic is held constant and a difference i
 
 | Profile | Human pair | Machine | Separation |
 |---|--:|--:|--:|
-| NEUTRAL | 5.6% | 23.6% | 18.0 points |
-| STRICT | 20.0% | 33.2% | 13.2 points |
+| NEUTRAL | 5.1% | 23.6% | 18.5 points |
+| STRICT | 19.6% | 33.2% | 13.6 points |
 
 ### Per-rule lift, STRICT
 
@@ -51,17 +51,18 @@ Findings per 1,000 lines on each side, and the ratio. Lift above 1 means the rul
 | `reversed-antithesis` | 0.22 | 0.08 | **0.4x** |
 | `ellipsis` | 2.02 | 0.30 | **0.1x** |
 | `invisible-unicode` | 0.49 | 0.01 | **0.0x** |
-| `arrow-symbol` | 0.00 | 0.00 | **neither** |
-| `bold-overuse` | 0.00 | 0.00 | **neither** |
-| `demonstrative-heading` | 0.00 | 0.00 | **neither** |
-| `emoji-decoration` | 0.00 | 0.00 | **neither** |
-| `heading-dependent-opener` | 0.00 | 0.00 | **neither** |
-| `inline-header-bullet` | 0.00 | 0.00 | **neither** |
-| `reveal-shape` | 0.04 | 0.00 | **neither** |
+| `arrow-symbol` | 0.00 | 0.00 | **neither fires** |
+| `bold-overuse` | 0.00 | 0.00 | **neither fires** |
+| `demonstrative-heading` | 0.00 | 0.00 | **neither fires** |
+| `emoji-decoration` | 0.00 | 0.00 | **neither fires** |
+| `heading-dependent-opener` | 0.00 | 0.00 | **neither fires** |
+| `inline-header-bullet` | 0.00 | 0.00 | **neither fires** |
 
 A rule reading `neither` mostly cannot fire on this data rather than failing to. The paired corpora are plain prose with no markdown, no headings, and no emoji, so the structural rules (`inline-header-bullet`, `bold-overuse`, `emoji-decoration`, `heading-dependent-opener`, `demonstrative-heading`, `horizontal-rule`) and the glyph rules have nothing to match. Judge those on the false-positive table below and on the unit fixtures, not here.
 
-Two rules score BELOW 1, meaning they fire more on the human side: `ellipsis` and `reversed-antithesis`. Both are already off by default, and this is the second independent reason for that. `invisible-unicode` is near zero on generated text because model output is typographically clean; it catches a provenance problem (watermarks, fingerprints, injection) rather than an authorship tell, which is why it is always on and scored separately.
+2 rules score BELOW 1, meaning they fire more on the human side: `reversed-antithesis`, `ellipsis`. A rule that fires more on human writing than on generated writing is not detecting authorship, and either belongs off by default or needs its pattern narrowed.
+
+`invisible-unicode` is near zero on generated text because model output is typographically clean. It catches a provenance problem (watermarks, fingerprints, injection) rather than an authorship tell, which is why it is always on and read separately from this table.
 
 Caveats that travel with every number above:
 
@@ -77,18 +78,17 @@ Target is the register this linter is pointed at (42,740 lines of technical and 
 | Rule | Target | Control | Default |
 |---|--:|--:|---|
 | `arrow-symbol` | 0.21 | 0.00 | on |
-| `banned opener` | 0.02 | 0.00 | on |
+| `banned opener` | 0.21 | 0.00 | on |
 | `banned phrase` | 0.82 | 0.51 | always |
 | `bold-overuse` | 0.05 | 0.00 | on |
-| `contrast-slop` | 0.30 | 0.32 | off |
+| `contrast-slop` | 0.35 | 0.41 | off |
 | `demonstrative-heading` | 0.02 | 0.00 | on |
 | `ellipsis` | 1.45 | 0.87 | off |
 | `em-dash` | 4.09 | 37.88 | off |
 | `emoji-decoration` | 0.02 | 0.00 | on |
-| `heading-dependent-opener` | 0.16 | 0.00 | on |
+| `heading-dependent-opener` | 0.19 | 0.00 | on |
 | `inline-header-bullet` | 0.33 | 0.00 | off |
 | `invisible-unicode` | 2.99 | 0.03 | always |
-| `reveal-shape` | 0.00 | 0.00 | on |
 | `reversed-antithesis` | 1.22 | 2.77 | off |
 
 ### Per source, STRICT
@@ -96,18 +96,17 @@ Target is the register this linter is pointed at (42,740 lines of technical and 
 | Rule | rust-book | k8s-concepts | mdn-guides | wikipedia | gutenberg |
 |---|--:|--:|--:|--:|--:|
 | `arrow-symbol` | 0.00 | 0.29 | 0.00 | 0.53 | 0.00 |
-| `banned opener` | 0.00 | 0.00 | 0.12 | 0.00 | 0.00 |
+| `banned opener` | 0.70 | 0.00 | 0.12 | 0.00 | 0.00 |
 | `banned phrase` | 1.40 | 0.29 | 0.00 | 1.59 | 0.51 |
 | `bold-overuse` | 0.00 | 0.00 | 0.24 | 0.00 | 0.00 |
-| `contrast-slop` | 0.00 | 0.22 | 0.24 | 0.85 | 0.32 |
+| `contrast-slop` | 0.18 | 0.22 | 0.24 | 0.85 | 0.41 |
 | `demonstrative-heading` | 0.00 | 0.00 | 0.12 | 0.00 | 0.00 |
 | `ellipsis` | 0.09 | 0.07 | 1.95 | 4.65 | 0.87 |
 | `em-dash` | 1.58 | 0.66 | 4.51 | 11.73 | 37.88 |
 | `emoji-decoration` | 0.00 | 0.00 | 0.00 | 0.11 | 0.00 |
-| `heading-dependent-opener` | 0.18 | 0.22 | 0.24 | 0.00 | 0.00 |
+| `heading-dependent-opener` | 0.26 | 0.22 | 0.24 | 0.00 | 0.00 |
 | `inline-header-bullet` | 0.53 | 0.59 | 0.00 | 0.00 | 0.00 |
 | `invisible-unicode` | 0.00 | 0.44 | 14.64 | 0.21 | 0.03 |
-| `reveal-shape` | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
 | `reversed-antithesis` | 1.05 | 0.80 | 0.37 | 2.75 | 2.77 |
 
 ## Which vocabulary entries fire on HUMAN prose
@@ -120,11 +119,13 @@ An entry firing often here is a candidate for demotion to the opt-in pack.
 | banned phrase: "straightforward" | 13 |
 | banned phrase: "in the heart of" | 9 |
 | banned phrase: "frankly" | 8 |
+| banned opener: "let's explore" | 6 |
 | banned phrase: "tapestry" | 5 |
 | banned phrase: "the truth is" | 3 |
 | banned phrase: "all things considered" | 3 |
 | banned phrase: "boasts" | 3 |
 | banned phrase: "delve" | 2 |
+| banned opener: "here's what" | 2 |
 | banned phrase: "navigate the" | 2 |
 | banned phrase: "vital role" | 2 |
 | banned phrase: "crucial role" | 2 |
@@ -134,8 +135,6 @@ An entry firing often here is a candidate for demotion to the opt-in pack.
 | banned phrase: "it is important to note" | 1 |
 | banned opener: "here's how" | 1 |
 | banned phrase: "paradigm shift" | 1 |
-| banned phrase: "seamless" | 1 |
-| banned phrase: "in conclusion" | 1 |
 
 ## Sample hits, machine text
 
@@ -189,12 +188,14 @@ An entry firing often here is a candidate for demotion to the opt-in pack.
 
 **`banned opener`**
 
-- mdn-guides: Sometimes you want to toggle the attribute or class name of two different elemen
+- rust-book: Let's explore how and why Rust encourages you to favor immutability and why
+- rust-book: Here's what the countdown would look like using a `for` loop and another method
+- rust-book: we've allocated on the heap. Let's explore some of those situations now.
 
 **`banned phrase`**
 
 - rust-book: chapters might not delve into details on a topic; we typically revisit the
-- rust-book: We now have a straightforward API that’s much harder to mess up, because the
+- rust-book: We now have a straightforward API that's much harder to mess up, because the
 - rust-book: the definitions they wanted to use because they could navigate the code based
 
 **`bold-overuse`**
@@ -204,9 +205,9 @@ An entry firing often here is a candidate for demotion to the opt-in pack.
 
 **`contrast-slop`**
 
+- rust-book: Nice! It's not the prettiest output, but it shows the values of all the fields
+- rust-book: values are valid first and panic if the values aren't valid. This is mostly for
 - k8s-concepts: Resource creation isn't the only operation that `kubectl` can perform in bulk. I
-- k8s-concepts: Cluster-level extended resources are not tied to nodes. They are usually managed
-- k8s-concepts: is not based on real-time feedback. It is still possible for individual
 
 **`demonstrative-heading`**
 
@@ -222,7 +223,7 @@ An entry firing often here is a candidate for demotion to the opt-in pack.
 
 - rust-book: program. That makes you a Rust programmer—welcome!
 - rust-book: we pass to it, but it also returns a value—in this case, an
-- rust-book: immutable by default—they’re always immutable. You declare constants using the
+- rust-book: immutable by default—they're always immutable. You declare constants using the
 
 **`emoji-decoration`**
 
@@ -230,9 +231,9 @@ An entry firing often here is a candidate for demotion to the opt-in pack.
 
 **`heading-dependent-opener`**
 
-- rust-book: It might seem like the paths we’ve written to call functions so far are
+- rust-book: It might seem like the paths we've written to call functions so far are
 - rust-book: It would also be appropriate to call `unwrap` when you have some other logic
-- k8s-concepts: It is suggested to maintain a set of configuration files in source control
+- rust-book: This isn't the last you'll see of concurrency in this book: the project in
 
 **`inline-header-bullet`**
 
@@ -245,11 +246,6 @@ An entry firing often here is a candidate for demotion to the opt-in pack.
 - k8s-concepts: │   └── my-configmap.yaml
 - k8s-concepts: │   └── my-configmap.yaml
 - k8s-concepts: │   └── my-deployment.yaml
-
-**`reveal-shape`**
-
-- hc3-eli5 (human): Some people do not believe that governments do need to exist . THe government , 
-- hc3-eli5 (human): From a Christian : Yes , our gods come from the same cultural origin ( Abraham )
 
 **`reversed-antithesis`**
 
