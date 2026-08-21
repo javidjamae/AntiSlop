@@ -70,10 +70,30 @@ writeFileSync(
   changelog.replace('## Unreleased', `## Unreleased\n\n_Nothing yet._\n\n## ${next} (${today})`)
 )
 
+// README — the install snippets pin a TAG, and a stale pin is worse than no
+// pin: it silently hands new users the previous release. Nothing else in the
+// repo would catch it, because the old tag resolves and installs fine.
+const readmePath = join(root, 'README.md')
+const readme = readFileSync(readmePath, 'utf8')
+const pinned = readme.replace(/AntiSlop#v\d+\.\d+\.\d+/g, `AntiSlop#v${next}`)
+const pinCount = (readme.match(/AntiSlop#v\d+\.\d+\.\d+/g) ?? []).length
+if (pinCount === 0) {
+  console.error('README.md has no AntiSlop#vX.Y.Z install pin — did the install section change?')
+  process.exit(1)
+}
+writeFileSync(readmePath, pinned)
+console.log(`updated ${pinCount} install pin(s) in README.md to v${next}`)
+
 console.log(`running tests before tagging ${next}…`)
 run('npm', ['test'], { stdio: 'inherit' })
 
-run('git', ['add', 'package.json', 'src/version.ts', 'CHANGELOG.md'])
+// The docs' own strict lint, which release.yml also runs. Catching it here
+// means a failure surfaces before the tag exists rather than after it is
+// pushed, when the only fix is a new tag.
+console.log('linting the docs with the built CLI…')
+run('node', ['dist/cli.js', 'README.md', 'RULES.md', 'CHANGELOG.md', '--strict'], { stdio: 'inherit' })
+
+run('git', ['add', 'package.json', 'src/version.ts', 'CHANGELOG.md', 'README.md'])
 run('git', ['commit', '-m', `release: v${next}`])
 run('git', ['tag', '-a', `v${next}`, '-m', `v${next}`])
 
