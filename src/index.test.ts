@@ -490,6 +490,14 @@ test('CLI: an invalid --fail-on is a usage error, not a silent default', () => {
   assert.match(r.stderr ?? '', /--fail-on must be one of/)
 })
 
+test('CLI: a bare --fail-on is a usage error, not a silent fallback to the default', () => {
+  // --fail-on never (with a space) is the realistic typo. Falling through to
+  // the default would gate the run while the author believes it does not.
+  const r = runCli(['--fail-on'], 'A sentence \u2014 with a dash.\n')
+  assert.equal(r.code, 2)
+  assert.match(r.stderr ?? '', /--fail-on takes a value/)
+})
+
 test('CLI: --json carries the severity counts and the gate that was applied', () => {
   const r = runCli(['--strict', '--json'], 'A sentence — with a dash.\n')
   const out = JSON.parse(r.stdout)

@@ -40,6 +40,14 @@ const paths = args.filter((a) => !a.startsWith('--'))
 // --fail-on sets which findings decide the EXIT CODE. It never changes which
 // rules run or what is reported: a warn-level finding is printed either way.
 const FAIL_ON_LEVELS = ['error', 'warn', 'info', 'never'] as const
+// A bare `--fail-on` (or `--fail-on never`, with a space) must NOT fall through
+// to the default. Silently ignoring it means the run gates while the author
+// believes they turned gating off — the same failure the config layer refuses
+// for an unknown rule name.
+if (args.includes('--fail-on')) {
+  console.error('antislop: --fail-on takes a value, as --fail-on=error|warn|info|never')
+  process.exit(2)
+}
 const failOnRaw = args.find((a) => a.startsWith('--fail-on='))?.slice('--fail-on='.length) ?? 'error'
 if (!(FAIL_ON_LEVELS as readonly string[]).includes(failOnRaw)) {
   console.error(`antislop: --fail-on must be one of ${FAIL_ON_LEVELS.join(', ')} (got "${failOnRaw}")`)
