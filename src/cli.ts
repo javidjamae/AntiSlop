@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // antislop CLI — lint files or stdin for the mechanical tells of AI prose.
 //
-//   antislop file.md [more.md ...] [--strict] [--json] [--config=path] [--pack=name]
+//   antislop file.md [more.md ...] [--strict] [--json] [--config=path]
+//                     [--pack=name] [--fail-on=error|warn|info|never]
 //   cat draft.md | antislop [--strict]
 //
 // Per-repo voice: an `antislop.config.json` discovered upward from each
@@ -11,11 +12,14 @@
 // `--strict` overrides the config's profile. `--config=` pins one explicitly.
 //
 // Markdown frontmatter title/description are linted as their own surfaces —
-// AI tells leak into metadata more often than anyone checks. Exit 1 when
-// anything fires (pre-commit-hook ready), 0 clean, 2 usage error.
+// AI tells leak into metadata more often than anyone checks.
+//
+// Exit 1 when anything AT OR ABOVE --fail-on fires (default `error`, which is
+// every rule that ships today, so the pre-commit contract is unchanged), 0
+// clean, 2 usage error. `--fail-on=never` reports without ever failing.
 import { readFileSync, existsSync } from 'node:fs'
 import { dirname, join, resolve, parse as parsePath } from 'node:path'
-import { lint, format, type Violation } from './index.js'
+import { lint, format, SEVERITY_RANK, type Violation, type Severity } from './index.js'
 import { resolveConfig, type AntislopConfig, type ResolvedConfig } from './config.js'
 import { VERSION } from './version.js'
 
@@ -32,6 +36,16 @@ const packs = args
   .filter((a) => a.startsWith('--pack='))
   .flatMap((a) => a.slice('--pack='.length).split(',').map((s) => s.trim()).filter(Boolean))
 const paths = args.filter((a) => !a.startsWith('--'))
+
+// --fail-on sets which findings decide the EXIT CODE. It never changes which
+// rules run or what is reported: a warn-level finding is printed either way.
+const FAIL_ON_LEVELS = ['error', 'warn', 'info', 'never'] as const
+const failOnRaw = args.find((a) => a.startsWith('--fail-on='))?.slice('--fail-on='.length) ?? 'error'
+if (!(FAIL_ON_LEVELS as readonly string[]).includes(failOnRaw)) {
+  console.error(`antislop: --fail-on must be one of ${FAIL_ON_LEVELS.join(', ')} (got "${failOnRaw}")`)
+  process.exit(2)
+}
+const failOn = failOnRaw as (typeof FAIL_ON_LEVELS)[number]
 
 function discoverConfig(startDir: string): string | null {
   let dir = resolve(startDir)
@@ -81,7 +95,12 @@ function lintDocument(name: string, raw: string, rc: ResolvedConfig): FileReport
   const bodyOffset = frontmatterMatch ? frontmatterMatch[0].split('\n').length - 1 : 0
   const field = (k: string) => front.match(new RegExp(`^${k}:\\s*(.*)$`, 'm'))?.[1]?.trim() ?? ''
 
-  const extras = { openers: rc.openers, customRules: rc.customRules, arrows: rc.arrows }
+  const extras = {
+    openers: rc.openers,
+    customRules: rc.customRules,
+    arrows: rc.arrows,
+    severities: rc.severities,
+  }
   const violations: Violation[] = [
     ...lint(field('title'), rc.rules, rc.banned, extras).map((v) => ({ ...v, rule: `title: ${v.rule}` })),
     ...lint(field('description'), rc.rules, rc.banned, extras).map((v) => ({ ...v, rule: `description: ${v.rule}` })),
@@ -104,21 +123,36 @@ if (paths.length) {
   const stdin = readFileSync(0, 'utf8')
   if (!stdin.trim()) {
     console.error(
-      'usage: antislop <file.md> [...] [--strict] [--json] [--config=path] [--pack=name], or pipe text on stdin'
+      'usage: antislop <file.md> [...] [--strict] [--json] [--config=path] [--pack=name] ' +
+        '[--fail-on=error|warn|info|never], or pipe text on stdin'
     )
     process.exit(2)
   }
   reports.push(lintDocument('<stdin>', stdin, loadConfig(process.cwd())))
 }
 
-const total = reports.reduce((n, r) => n + r.violations.length, 0)
+const all = reports.flatMap((r) => r.violations)
+const total = all.length
+const severityOfViolation = (v: Violation): Severity => v.severity ?? 'error'
+const counts: Record<Severity, number> = { error: 0, warn: 0, info: 0 }
+for (const v of all) counts[severityOfViolation(v)]++
+// Only findings at or above the threshold decide the exit code. Everything is
+// still printed: a rule set to `info` is advice, not a secret.
+const failing =
+  failOn === 'never' ? 0 : all.filter((v) => SEVERITY_RANK[severityOfViolation(v)] >= SEVERITY_RANK[failOn]).length
+
 if (asJson) {
-  console.log(JSON.stringify({ total, strict, reports }, null, 2))
+  console.log(JSON.stringify({ total, failing, failOn, counts, strict, reports }, null, 2))
 } else {
   for (const r of reports) {
     console.log(`\n${r.file}: ${r.violations.length} finding(s)`)
     if (r.violations.length) console.log(format(r.violations))
   }
-  console.log(`\n${total} finding(s) total${strict ? ' [strict]' : ''}`)
+  // The breakdown appears only when there is something to break down, so the
+  // common all-error run reads exactly as it did before.
+  const mixed = counts.error !== total
+  const breakdown = mixed ? ` (${counts.error} error, ${counts.warn} warn, ${counts.info} info)` : ''
+  const gate = failOn === 'error' ? '' : ` [fail-on=${failOn}]`
+  console.log(`\n${total} finding(s) total${breakdown}${strict ? ' [strict]' : ''}${gate}`)
 }
-process.exit(total ? 1 : 0)
+process.exit(failing ? 1 : 0)

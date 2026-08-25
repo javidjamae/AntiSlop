@@ -1,7 +1,23 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { lint, NEUTRAL, STRICT, demonstrativeHeadings, headingDependentOpeners, resolveConfig, VERSION } from './index.js'
+import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import {
+  lint,
+  format,
+  NEUTRAL,
+  STRICT,
+  DEFAULT_SEVERITY,
+  SEVERITY_RANK,
+  severityFamily,
+  severityOf,
+  demonstrativeHeadings,
+  headingDependentOpeners,
+  resolveConfig,
+  VERSION,
+} from './index.js'
 
 
 test('VERSION matches package.json (release script syncs both)', () => {
@@ -351,4 +367,134 @@ test('imported vocabulary is in the defaults, and the tic entries are not', () =
 
 test('clean prose is clean', () => {
   assert.equal(lint('How to trim silence from a video', STRICT).length, 0)
+})
+
+
+// ---------------------------------------------------------------------------
+// Severity (error / warn / info)
+// ---------------------------------------------------------------------------
+
+test('every rule that ships today defaults to error, so exit codes do not move', () => {
+  // This is the whole backwards-compatibility guarantee of the feature. If a
+  // rule is ever added below error, it must be a NEW rule — flipping an
+  // existing one silently turns a red pipeline green.
+  for (const [rule, sev] of Object.entries(DEFAULT_SEVERITY)) {
+    assert.equal(sev, 'error', `${rule} must default to error`)
+  }
+})
+
+test('lint stamps a severity on every finding, including the heading rules', () => {
+  const md = '## A heading about it\n\nIt is fine.\n\nHere\'s why that matters.\n'
+  const vs = lint(md, STRICT)
+  assert.ok(vs.length > 0)
+  for (const v of vs) assert.equal(v.severity, 'error', `${v.rule} unstamped`)
+  // demonstrative-heading is built outside push(); prove it is stamped too.
+  assert.ok(vs.some((v) => v.rule === 'demonstrative-heading' && v.severity === 'error'))
+})
+
+test('severityFamily collapses the per-instance rule IDs', () => {
+  assert.equal(severityFamily('banned opener: "here\'s why"'), 'banned-opener')
+  assert.equal(severityFamily('banned phrase: "delve"'), 'banned-phrase')
+  assert.equal(severityFamily('custom: my-rule'), 'custom')
+  assert.equal(severityFamily('em-dash'), 'em-dash')
+})
+
+test('severityOf: overrides beat defaults, and an individual custom rule beats its family', () => {
+  assert.equal(severityOf('em-dash'), 'error')
+  assert.equal(severityOf('em-dash', { 'em-dash': 'info' }), 'info')
+  assert.equal(severityOf('banned opener: "let\'s dive in"', { 'banned-opener': 'warn' }), 'warn')
+  assert.equal(severityOf('custom: a', { custom: 'warn' }), 'warn')
+  assert.equal(severityOf('custom: a', { custom: 'warn', 'custom: a': 'info' }), 'info')
+  // An unknown rule name still resolves rather than throwing: validation is the
+  // config layer's job, and lint() must never crash on a stray ID.
+  assert.equal(severityOf('not-a-rule'), 'error')
+})
+
+test('severities config: both spellings, and it reaches lint', () => {
+  const byId = resolveConfig({ profile: 'strict', severities: { 'em-dash': 'info' } })
+  assert.equal(byId.severities['em-dash'], 'info')
+  const byKey = resolveConfig({ profile: 'strict', severities: { emDash: 'warn' } })
+  assert.equal(byKey.severities['em-dash'], 'warn')
+
+  const vs = lint('A sentence — with a dash.', byId.rules, byId.banned, { severities: byId.severities })
+  const dash = vs.find((v) => v.rule === 'em-dash')
+  assert.ok(dash)
+  assert.equal(dash.severity, 'info')
+})
+
+test('severities config rejects a bad level and an unknown rule, rather than ignoring them', () => {
+  assert.throws(() => resolveConfig({ severities: { 'em-dash': 'critical' as never } }), /must be one of/)
+  assert.throws(() => resolveConfig({ severities: { 'no-such-rule': 'info' } }), /unknown rule/)
+})
+
+test('an always-on rule accepts a severity even though it cannot be disabled', () => {
+  // `rules` throws for these; severity is the one dial they do expose.
+  assert.throws(() => resolveConfig({ rules: { 'invisible-unicode': false } as never }), /always on/)
+  const rc = resolveConfig({ severities: { 'invisible-unicode': 'warn' } })
+  assert.equal(rc.severities['invisible-unicode'], 'warn')
+})
+
+test('SEVERITY_RANK orders the levels so a threshold is a number comparison', () => {
+  assert.ok(SEVERITY_RANK.info < SEVERITY_RANK.warn)
+  assert.ok(SEVERITY_RANK.warn < SEVERITY_RANK.error)
+})
+
+test('format prints the level, and treats an absent severity as error', () => {
+  assert.match(format([{ line: 1, rule: 'em-dash', excerpt: 'x' }]), /\[error\] em-dash/)
+  assert.match(format([{ line: 1, rule: 'em-dash', excerpt: 'x', severity: 'info' }]), /\[info\] em-dash/)
+})
+
+// --- CLI exit-code contract -------------------------------------------------
+
+const CLI = new URL('./cli.js', import.meta.url).pathname
+function runCli(args: string[], stdin: string) {
+  try {
+    const stdout = execFileSync(process.execPath, [CLI, ...args], { input: stdin, encoding: 'utf8' })
+    return { code: 0, stdout }
+  } catch (e) {
+    const err = e as { status: number; stdout: string; stderr: string }
+    return { code: err.status, stdout: err.stdout ?? '', stderr: err.stderr ?? '' }
+  }
+}
+
+test('CLI: default exit code is unchanged — any finding still fails', () => {
+  assert.equal(runCli(['--strict'], 'A sentence — with a dash.\n').code, 1)
+  assert.equal(runCli(['--strict'], 'A perfectly ordinary sentence.\n').code, 0)
+})
+
+test('CLI: --fail-on=never reports the finding but exits 0', () => {
+  const r = runCli(['--strict', '--fail-on=never'], 'A sentence — with a dash.\n')
+  assert.equal(r.code, 0)
+  assert.match(r.stdout, /em-dash/)          // still reported
+  assert.match(r.stdout, /fail-on=never/)
+})
+
+test('CLI: --fail-on=warn does not fail on an info-level finding', () => {
+  // Drive it through a config file, the way a repo actually would.
+  const dir = mkdtempSync(join(tmpdir(), 'antislop-sev-'))
+  const cfgPath = join(dir, 'antislop.config.json')
+  writeFileSync(cfgPath, JSON.stringify({ profile: 'strict', severities: { 'em-dash': 'info' } }))
+
+  const text = 'A sentence — with a dash.\n'
+  assert.equal(runCli([`--config=${cfgPath}`, '--fail-on=warn'], text).code, 0)
+  assert.equal(runCli([`--config=${cfgPath}`, '--fail-on=info'], text).code, 1)
+  // Default threshold is error, and the rule is now info, so it does not fail.
+  const dflt = runCli([`--config=${cfgPath}`], text)
+  assert.equal(dflt.code, 0)
+  assert.match(dflt.stdout, /\[info\] em-dash/)
+})
+
+test('CLI: an invalid --fail-on is a usage error, not a silent default', () => {
+  const r = runCli(['--fail-on=loud'], 'text\n')
+  assert.equal(r.code, 2)
+  assert.match(r.stderr ?? '', /--fail-on must be one of/)
+})
+
+test('CLI: --json carries the severity counts and the gate that was applied', () => {
+  const r = runCli(['--strict', '--json'], 'A sentence — with a dash.\n')
+  const out = JSON.parse(r.stdout)
+  assert.equal(out.failOn, 'error')
+  assert.equal(out.counts.error, out.total)
+  assert.equal(out.failing, out.total)
+  assert.equal(out.reports[0].violations[0].severity, 'error')
 })

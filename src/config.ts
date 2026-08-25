@@ -9,7 +9,9 @@ import {
   BANNED_OPENERS,
   DEFAULT_BANNED_PHRASES,
   PHRASE_PACKS,
+  DEFAULT_SEVERITY,
   type RuleSet,
+  type Severity,
 } from './index.js'
 
 export interface CustomRule {
@@ -42,8 +44,14 @@ export interface AntislopConfig {
   customRules?: CustomRule[]
   /** Site arrow conventions beyond the universal core exemptions
    *  (breadcrumbs, pipelines, leading back-links are always exempt).
-   *  trailingCta: exempt a "→" ending a line or a link text. */
+   *  trailingCta: exempt a "→" ending a link text or a line. */
   arrowExemptions?: { trailingCta?: boolean }
+  /** Per-rule severity overrides: "error" | "warn" | "info". Accepts either
+   *  spelling of a rule name, same as `rules`. A rule set below "error" still
+   *  RUNS and still reports; it just stops failing the run under the default
+   *  --fail-on=error. Unlike `rules`, always-on rules accept a severity: they
+   *  cannot be silenced, but a site may choose to treat one as advisory. */
+  severities?: Record<string, Severity>
 }
 
 export interface CompiledCustomRule {
@@ -58,6 +66,8 @@ export interface ResolvedConfig {
   openers: string[]
   customRules: CompiledCustomRule[]
   arrows: { trailingCta: boolean }
+  /** Keyed by rule ID as printed in findings; empty when nothing is overridden. */
+  severities: Record<string, Severity>
 }
 
 /**
@@ -119,6 +129,41 @@ function normalizeRuleOverrides(raw: Partial<RuleSet> | Record<string, boolean>)
   return out
 }
 
+const KEY_TO_RULE_ID: Record<string, string> = Object.fromEntries(
+  Object.entries(RULE_ID_TO_KEY).map(([id, key]) => [key, id])
+)
+const VALID_SEVERITIES = new Set(['error', 'warn', 'info'])
+
+/**
+ * Resolve a `severities` map to rule IDs. Same contract as the rule overrides:
+ * an unrecognized rule name or an invalid level THROWS. A typo that is silently
+ * ignored produces a config that looks applied and a rule that quietly keeps
+ * its old weight, which is exactly the failure this project refuses elsewhere.
+ */
+function normalizeSeverities(raw: Record<string, string>): Record<string, Severity> {
+  const out: Record<string, Severity> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (!VALID_SEVERITIES.has(value)) {
+      throw new Error(
+        `antislop config: severity for "${key}" must be one of error, warn, info (got ${JSON.stringify(value)}).`
+      )
+    }
+    // Accept the camelCase config key, the kebab rule ID, or a custom-rule
+    // address (`custom` for the family, `custom: my-id` for one rule).
+    const id =
+      KEY_TO_RULE_ID[key] ?? (key in DEFAULT_SEVERITY || key.startsWith('custom:') ? key : undefined)
+    if (!id) {
+      throw new Error(
+        `antislop config: unknown rule "${key}" in severities. Valid names: ` +
+          `${Object.keys(DEFAULT_SEVERITY).sort().join(', ')}, or a camelCase rule key, ` +
+          `or "custom: <id>" for one custom rule.`
+      )
+    }
+    out[id] = value as Severity
+  }
+  return out
+}
+
 export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
   const base = cfg.profile === 'strict' ? STRICT : NEUTRAL
   const rules: RuleSet = { ...base, ...normalizeRuleOverrides(cfg.rules ?? {}) }
@@ -166,5 +211,6 @@ export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
     openers,
     customRules,
     arrows: { trailingCta: cfg.arrowExemptions?.trailingCta ?? false },
+    severities: normalizeSeverities(cfg.severities ?? {}),
   }
 }

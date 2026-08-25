@@ -6,7 +6,27 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
-_Nothing yet._
+### Added
+
+- Rule severity: `error`, `warn`, `info`. Findings carry a `severity`, and the
+  CLI gains `--fail-on=error|warn|info|never` to choose which levels decide the
+  exit code. Set per rule through a new `severities` map in
+  `antislop.config.json`, which takes either spelling of a rule name and also
+  applies to the always-on rules (they still cannot be disabled).
+- `--json` output gains `failing`, `failOn`, and a `counts` breakdown by level,
+  so a host scoring findings reads the weight off the finding instead of
+  maintaining its own table. ([#22](https://github.com/javidjamae/AntiSlop/issues/22))
+
+### Changed
+
+- Human-readable output prints the level per finding, as `[error]` before the
+  rule name. The summary line gains a breakdown only when a run is not
+  all-`error`, so an ordinary run reads as it did before. `--json` is the stable surface for
+  anything parsing output.
+
+**Nothing changes for an existing config.** Every rule that ships declares
+`error`, the default threshold is `error`, so the same runs pass and fail as
+before. Severity is opt-in.
 
 ## 0.4.0 (2026-08-21)
 
