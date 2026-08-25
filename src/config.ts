@@ -129,10 +129,18 @@ function normalizeRuleOverrides(raw: Partial<RuleSet> | Record<string, boolean>)
   return out
 }
 
-const KEY_TO_RULE_ID: Record<string, string> = Object.fromEntries(
-  Object.entries(RULE_ID_TO_KEY).map(([id, key]) => [key, id])
+// Null-prototype, so an inherited member name ("toString", "constructor") is a
+// miss rather than a truthy hit that bypasses the unknown-rule throw below.
+const KEY_TO_RULE_ID: Record<string, string> = Object.assign(
+  Object.create(null),
+  Object.fromEntries(Object.entries(RULE_ID_TO_KEY).map(([id, key]) => [key, id]))
 )
 const VALID_SEVERITIES = new Set(['error', 'warn', 'info'])
+
+/** Findings print a custom rule as `custom: <id>` WITH a space. Accept the
+ *  spaced and unspaced spellings and canonicalize to what severityOf matches,
+ *  otherwise the override resolves cleanly and silently never fires. */
+const CUSTOM_ADDRESS = /^custom:\s*(.+)$/
 
 /**
  * Resolve a `severities` map to rule IDs. Same contract as the rule overrides:
@@ -140,18 +148,40 @@ const VALID_SEVERITIES = new Set(['error', 'warn', 'info'])
  * ignored produces a config that looks applied and a rule that quietly keeps
  * its old weight, which is exactly the failure this project refuses elsewhere.
  */
-function normalizeSeverities(raw: Record<string, string>): Record<string, Severity> {
+function normalizeSeverities(
+  raw: Record<string, string>,
+  customRules: CustomRule[]
+): Record<string, Severity> {
   const out: Record<string, Severity> = {}
+  const customIds = new Set(customRules.map((r) => r.id))
   for (const [key, value] of Object.entries(raw)) {
     if (!VALID_SEVERITIES.has(value)) {
       throw new Error(
         `antislop config: severity for "${key}" must be one of error, warn, info (got ${JSON.stringify(value)}).`
       )
     }
-    // Accept the camelCase config key, the kebab rule ID, or a custom-rule
-    // address (`custom` for the family, `custom: my-id` for one rule).
-    const id =
-      KEY_TO_RULE_ID[key] ?? (key in DEFAULT_SEVERITY || key.startsWith('custom:') ? key : undefined)
+    // A single custom rule, addressed by id. Canonicalized to the spaced form
+    // findings actually print, and checked against the rules that exist —
+    // a typo here is the "looks applied, does nothing" failure, not a no-op.
+    const custom = CUSTOM_ADDRESS.exec(key)
+    if (custom) {
+      const id = custom[1].trim()
+      if (!customIds.has(id)) {
+        throw new Error(
+          `antislop config: severities names custom rule "${id}", which is not in customRules. ` +
+            `Defined: ${customIds.size ? [...customIds].sort().join(', ') : '(none)'}.`
+        )
+      }
+      out[`custom: ${id}`] = value as Severity
+      continue
+    }
+    // Otherwise the camelCase config key or the kebab rule ID. Object.hasOwn so
+    // an inherited member name cannot pose as a rule.
+    const id = Object.hasOwn(KEY_TO_RULE_ID, key)
+      ? KEY_TO_RULE_ID[key]
+      : Object.hasOwn(DEFAULT_SEVERITY, key)
+        ? key
+        : undefined
     if (!id) {
       throw new Error(
         `antislop config: unknown rule "${key}" in severities. Valid names: ` +
@@ -162,6 +192,25 @@ function normalizeSeverities(raw: Record<string, string>): Record<string, Severi
     out[id] = value as Severity
   }
   return out
+}
+
+/**
+ * The `extras` argument `lint()` wants, built from a resolved config.
+ *
+ * This mapping used to be hand-copied at the call site, which meant every field
+ * added to ResolvedConfig had to be remembered there or it was silently dropped
+ * — a config that resolves correctly and then does nothing, with no error.
+ * Deriving the type from ResolvedConfig makes the compiler remember instead.
+ */
+export function toLintExtras(rc: ResolvedConfig): Required<
+  Pick<ResolvedConfig, 'openers' | 'customRules' | 'arrows' | 'severities'>
+> {
+  return {
+    openers: rc.openers,
+    customRules: rc.customRules,
+    arrows: rc.arrows,
+    severities: rc.severities,
+  }
 }
 
 export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
@@ -211,6 +260,6 @@ export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
     openers,
     customRules,
     arrows: { trailingCta: cfg.arrowExemptions?.trailingCta ?? false },
-    severities: normalizeSeverities(cfg.severities ?? {}),
+    severities: normalizeSeverities(cfg.severities ?? {}, cfg.customRules ?? []),
   }
 }

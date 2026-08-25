@@ -47,7 +47,7 @@ const violations = lint(markdown, STRICT)
 if (violations.length) console.log(format(violations))
 ```
 
-`lint(text, rules?, bannedPhrases?)` returns `{ line, rule, excerpt, suggestion }` objects. Pass your own phrase list to replace the default vocabulary. Every rule is a boolean on the `RuleSet`, so any profile between `NEUTRAL` and `STRICT` is a spread away.
+`lint(text, rules?, bannedPhrases?, extras?)` returns `{ line, rule, excerpt, suggestion, severity }` objects, where `severity` is `error`, `warn`, or `info`. A host that scores findings reads the weight off the finding rather than keeping its own table. To apply a project's config, pass `toLintExtras(resolveConfig(cfg))` as the fourth argument; building that object by hand silently drops whatever it omits. Pass your own phrase list to replace the default vocabulary. Every rule is a boolean on the `RuleSet`, so any profile between `NEUTRAL` and `STRICT` is a spread away.
 
 ## Per-project voice: `antislop.config.json`
 

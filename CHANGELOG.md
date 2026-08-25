@@ -24,9 +24,13 @@ all from one commit. The tag is the version consumers pin.
   all-`error`, so an ordinary run reads as it did before. `--json` is the stable surface for
   anything parsing output.
 
-**Nothing changes for an existing config.** Every rule that ships declares
-`error`, the default threshold is `error`, so the same runs pass and fail as
-before. Severity is opt-in.
+**Exit codes are unchanged for every existing config.** Every rule that ships
+declares `error` and the default threshold is `error`, so the same runs pass and
+the same runs fail. Severity itself is opt-in.
+
+What does change for everyone is the human-readable output above: each finding
+now carries a `[level]` prefix. Anything parsing stdout will see it. `--json`
+is the surface to parse, and it gained fields rather than changing any.
 
 ## 0.4.0 (2026-08-21)
 

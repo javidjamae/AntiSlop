@@ -4,6 +4,7 @@ import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { toLintExtras } from './config.js'
 import {
   lint,
   format,
@@ -425,6 +426,51 @@ test('severities config: both spellings, and it reaches lint', () => {
 test('severities config rejects a bad level and an unknown rule, rather than ignoring them', () => {
   assert.throws(() => resolveConfig({ severities: { 'em-dash': 'critical' as never } }), /must be one of/)
   assert.throws(() => resolveConfig({ severities: { 'no-such-rule': 'info' } }), /unknown rule/)
+})
+
+test('a custom-rule severity reaches the finding, spaced or unspaced', () => {
+  // Findings print `custom: <id>` WITH a space. The unspaced spelling is the
+  // one a config author naturally writes, and it used to resolve cleanly and
+  // then never match anything.
+  const cfg = {
+    customRules: [{ id: 'my-rule', pattern: 'zzz' }],
+    severities: { 'custom:my-rule': 'info' as const },
+  }
+  const rc = resolveConfig(cfg)
+  assert.equal(rc.severities['custom: my-rule'], 'info')
+
+  const vs = lint('a line with zzz in it', STRICT, undefined, toLintExtras(rc))
+  const hit = vs.find((v) => v.rule === 'custom: my-rule')
+  assert.ok(hit, 'custom rule should fire')
+  assert.equal(hit.severity, 'info')
+
+  // The spaced spelling resolves to the same place.
+  const spaced = resolveConfig({ ...cfg, severities: { 'custom: my-rule': 'warn' as const } })
+  assert.equal(spaced.severities['custom: my-rule'], 'warn')
+})
+
+test('a severity naming a custom rule that does not exist throws', () => {
+  assert.throws(
+    () => resolveConfig({ customRules: [{ id: 'real', pattern: 'x' }], severities: { 'custom: nope': 'info' } }),
+    /not in customRules/
+  )
+  assert.throws(() => resolveConfig({ severities: { 'custom: anything': 'info' } }), /\(none\)/)
+})
+
+test('an inherited member name is not a rule name', () => {
+  // Plain-object lookups made "toString" and friends resolve truthy and skip
+  // the unknown-rule throw entirely.
+  for (const key of ['toString', 'constructor', 'hasOwnProperty', '__proto__']) {
+    assert.throws(() => resolveConfig({ severities: { [key]: 'warn' } }), /unknown rule|must be one of/, key)
+  }
+})
+
+test('toLintExtras carries every field lint() consumes', () => {
+  const rc = resolveConfig({ profile: 'strict', severities: { 'em-dash': 'info' } })
+  const extras = toLintExtras(rc)
+  assert.deepEqual(Object.keys(extras).sort(), ['arrows', 'customRules', 'openers', 'severities'])
+  const v = lint('A sentence — with a dash.', rc.rules, rc.banned, extras).find((x) => x.rule === 'em-dash')
+  assert.equal(v?.severity, 'info')
 })
 
 test('an always-on rule accepts a severity even though it cannot be disabled', () => {

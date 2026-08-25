@@ -20,7 +20,7 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { dirname, join, resolve, parse as parsePath } from 'node:path'
 import { lint, format, SEVERITY_RANK, type Violation, type Severity } from './index.js'
-import { resolveConfig, type AntislopConfig, type ResolvedConfig } from './config.js'
+import { resolveConfig, toLintExtras, type AntislopConfig, type ResolvedConfig } from './config.js'
 import { VERSION } from './version.js'
 
 const args = process.argv.slice(2)
@@ -103,12 +103,7 @@ function lintDocument(name: string, raw: string, rc: ResolvedConfig): FileReport
   const bodyOffset = frontmatterMatch ? frontmatterMatch[0].split('\n').length - 1 : 0
   const field = (k: string) => front.match(new RegExp(`^${k}:\\s*(.*)$`, 'm'))?.[1]?.trim() ?? ''
 
-  const extras = {
-    openers: rc.openers,
-    customRules: rc.customRules,
-    arrows: rc.arrows,
-    severities: rc.severities,
-  }
+  const extras = toLintExtras(rc)
   const violations: Violation[] = [
     ...lint(field('title'), rc.rules, rc.banned, extras).map((v) => ({ ...v, rule: `title: ${v.rule}` })),
     ...lint(field('description'), rc.rules, rc.banned, extras).map((v) => ({ ...v, rule: `description: ${v.rule}` })),
