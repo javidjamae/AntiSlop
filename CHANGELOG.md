@@ -28,7 +28,13 @@ all from one commit. The tag is the version consumers pin.
 declares `error` and the default threshold is `error`, so the same runs pass and
 the same runs fail. Severity itself is opt-in.
 
-What does change for everyone is the human-readable output above: each finding
+Note one consequence once a rule IS moved below the threshold: exit 0 stops
+meaning "no findings" and starts meaning "nothing at or above the threshold".
+Printed output stays honest, since every finding is reported whatever its level
+and the summary breaks down the counts, but anything reading only the exit code
+cannot tell the two apart. Report a clean run with the threshold it ran at.
+
+What else changes for everyone is the human-readable output above: each finding
 now carries a `[level]` prefix. Anything parsing stdout will see it. `--json`
 is the surface to parse, and it gained fields rather than changing any.
 
