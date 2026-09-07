@@ -39,7 +39,7 @@ export interface Violation {
  * Keyed by rule ID as printed in findings. The dynamic families use their
  * collective key: `banned-opener`, `banned-phrase`, `custom`.
  */
-export const DEFAULT_SEVERITY: Record<string, Severity> = {
+export const DEFAULT_SEVERITY: Record<string, Severity> = Object.assign(Object.create(null), {
   'unicode-bold': 'error',
   'engagement-bait': 'error',
   'invisible-unicode': 'error',
@@ -58,7 +58,12 @@ export const DEFAULT_SEVERITY: Record<string, Severity> = {
   'banned-opener': 'error',
   'banned-phrase': 'error',
   custom: 'error',
-}
+  // Null prototype, matching KEY_TO_RULE_ID in config.ts and for the same
+  // reason: an inherited member name must be a MISS, not a truthy hit. A rule
+  // ID colliding with an Object.prototype member would otherwise resolve to a
+  // function, and SEVERITY_RANK[thatFunction] is undefined, so the comparison
+  // in the CLI would be false and the finding would silently never gate.
+})
 
 /**
  * The family a printed rule ID belongs to, for severity lookup. Three rules

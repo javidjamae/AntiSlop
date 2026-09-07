@@ -160,7 +160,8 @@ Set it per rule in `antislop.config.json`:
 ```
 
 Move the threshold for a single run with `--fail-on=error|warn|info|never`.
-`--fail-on=never` prints every finding and exits 0.
+`--fail-on=never` prints every finding and never fails on one. Usage
+errors are unaffected: a broken config or an unreadable file still exits 2.
 
 Reclassifying an EXISTING rule below `error` is a breaking change even though
 it loosens rather than tightens: it silently turns a red pipeline green, which

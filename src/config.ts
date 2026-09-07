@@ -12,6 +12,7 @@ import {
   DEFAULT_SEVERITY,
   type RuleSet,
   type Severity,
+  type LintExtras,
 } from './index.js'
 
 export interface CustomRule {
@@ -200,11 +201,14 @@ function normalizeSeverities(
  * This mapping used to be hand-copied at the call site, which meant every field
  * added to ResolvedConfig had to be remembered there or it was silently dropped
  * — a config that resolves correctly and then does nothing, with no error.
- * Deriving the type from ResolvedConfig makes the compiler remember instead.
+ *
+ * The return type is `Required<LintExtras>`, deliberately: it is the type of
+ * the argument `lint()` actually reads, so the compiler errors the moment
+ * LintExtras grows a field this function does not supply. Typing it against
+ * ResolvedConfig instead only restated the fields already listed below, which
+ * is exactly the hand-copying this is meant to prevent.
  */
-export function toLintExtras(rc: ResolvedConfig): Required<
-  Pick<ResolvedConfig, 'openers' | 'customRules' | 'arrows' | 'severities'>
-> {
+export function toLintExtras(rc: ResolvedConfig): Required<LintExtras> {
   return {
     openers: rc.openers,
     customRules: rc.customRules,
@@ -213,7 +217,30 @@ export function toLintExtras(rc: ResolvedConfig): Required<
   }
 }
 
+/** Every key `AntislopConfig` understands. An unknown top-level key is a typo,
+ *  and a typo that resolves to nothing is the worst kind: `"severity"` for
+ *  `"severities"` leaves the run gating while the author believes the rule was
+ *  made advisory. The same reasoning the rule-name check already applies inside
+ *  `severities`, applied one level up. */
+const KNOWN_CONFIG_KEYS = [
+  'profile',
+  'rules',
+  'bannedPhrases',
+  'phrasePacks',
+  'openers',
+  'customRules',
+  'arrowExemptions',
+  'severities',
+] as const
+
 export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
+  for (const key of Object.keys(cfg)) {
+    if (!(KNOWN_CONFIG_KEYS as readonly string[]).includes(key)) {
+      throw new Error(
+        `antislop config: unknown key "${key}". Valid keys: ${[...KNOWN_CONFIG_KEYS].sort().join(', ')}.`
+      )
+    }
+  }
   const base = cfg.profile === 'strict' ? STRICT : NEUTRAL
   const rules: RuleSet = { ...base, ...normalizeRuleOverrides(cfg.rules ?? {}) }
 

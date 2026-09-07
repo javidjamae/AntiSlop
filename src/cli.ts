@@ -37,6 +37,28 @@ const packs = args
   .flatMap((a) => a.slice('--pack='.length).split(',').map((s) => s.trim()).filter(Boolean))
 const paths = args.filter((a) => !a.startsWith('--'))
 
+// Every flag the CLI understands. An unrecognized `--flag` is a usage error,
+// not a file and not silence. Dropping it on the floor is the same failure the
+// bare `--fail-on` guard below refuses: `--failon=never` or `--fail_on=never`
+// would report the finding and still exit 1, while the author believes gating
+// is off. A typo in a flag must be louder than a typo in a filename.
+const KNOWN_FLAGS = ['--strict', '--json', '--version'] as const
+const KNOWN_FLAG_PREFIXES = ['--config=', '--pack=', '--fail-on='] as const
+const unknownFlag = args.find(
+  (a) =>
+    a.startsWith('--') &&
+    a !== '--fail-on' && // handled below, with a message about the missing value
+    !(KNOWN_FLAGS as readonly string[]).includes(a) &&
+    !KNOWN_FLAG_PREFIXES.some((p) => a.startsWith(p))
+)
+if (unknownFlag) {
+  console.error(
+    `antislop: unknown option "${unknownFlag}". Valid options: --strict, --json, --version, ` +
+      '--config=path, --pack=name, --fail-on=error|warn|info|never'
+  )
+  process.exit(2)
+}
+
 // --fail-on sets which findings decide the EXIT CODE. It never changes which
 // rules run or what is reported: a warn-level finding is printed either way.
 const FAIL_ON_LEVELS = ['error', 'warn', 'info', 'never'] as const

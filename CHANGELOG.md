@@ -16,6 +16,14 @@ all from one commit. The tag is the version consumers pin.
 - `--json` output gains `failing`, `failOn`, and a `counts` breakdown by level,
   so a host scoring findings reads the weight off the finding instead of
   maintaining its own table. ([#22](https://github.com/javidjamae/AntiSlop/issues/22))
+- An unrecognized `--flag` is now a usage error (exit 2) naming the valid
+  options, and an unknown top-level key in `antislop.config.json` throws
+  naming the valid keys. Both used to be ignored in silence. The typos this
+  feature invites are `--failon=never` and `severity` for `severities`, and
+  either one would otherwise leave the run gating while the author believed
+  gating was off.
+- `Object.keys(DEFAULT_SEVERITY)` is the rule-ID list, which lets a consumer
+  drift-test the always-on rules that no `RuleSet` toggle can reach.
 
 ### Changed
 
