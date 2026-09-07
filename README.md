@@ -47,7 +47,7 @@ const violations = lint(markdown, STRICT)
 if (violations.length) console.log(format(violations))
 ```
 
-`lint(text, rules?, bannedPhrases?)` returns `{ line, rule, excerpt, suggestion }` objects. Pass your own phrase list to replace the default vocabulary. Every rule is a boolean on the `RuleSet`, so any profile between `NEUTRAL` and `STRICT` is a spread away.
+`lint(text, rules?, bannedPhrases?, extras?)` returns `{ line, rule, excerpt, suggestion, severity }` objects, where `severity` is `error`, `warn`, or `info`. A host that scores findings reads the weight off the finding rather than keeping its own table. To apply a project's config, pass `toLintExtras(resolveConfig(cfg))` as the fourth argument; building that object by hand silently drops whatever it omits. Pass your own phrase list to replace the default vocabulary. Every rule is a boolean on the `RuleSet`, so any profile between `NEUTRAL` and `STRICT` is a spread away.
 
 ## Per-project voice: `antislop.config.json`
 
@@ -64,6 +64,7 @@ Drop an `antislop.config.json` at a repo's root and the CLI picks it up for any 
   "phrasePacks": ["aggressive"],
   "openers": { "add": ["picture this"] },
   "arrowExemptions": { "trailingCta": true },
+  "severities": { "em-dash": "warn" },
   "customRules": [
     {
       "id": "no-passive-belief",
@@ -75,6 +76,10 @@ Drop an `antislop.config.json` at a repo's root and the CLI picks it up for any 
 ```
 
 `rules` accepts either the camelCase key or the rule ID as printed in findings, so `"arrow-symbol": false` and `"arrows": false` are equivalent. An unrecognized name exits 2 with the list of valid ones rather than being ignored. `profile` sets the base, `rules` overrides per rule, and the phrase lists take either an `add`/`remove` object (edits the defaults) or a plain array (replaces them). `--strict` on the CLI overrides the config's profile; `--config=path` pins a config explicitly. The same shapes are available in the API through `resolveConfig()`.
+
+`severities` sets what a finding costs: `error`, `warn`, or `info`. Every rule that ships is `error`, and only `error` fails the run by default, so an unchanged config exits exactly as it did before. Dropping a rule to `warn` or `info` keeps it running and keeps it reported. It stops gating, which is the right register for a tell a human has to judge in context. `--fail-on=error|warn|info|never` moves the threshold for one run; `--fail-on=never` reports everything and never fails on findings. It does not make every run exit 0: a broken config, an unknown rule or pack name, and an unreadable file are usage errors and still exit 2, which is what keeps a typo in CI from passing as an advisory run. Severity takes either spelling of a rule name, and unlike `rules` it also applies to the always-on rules: those cannot be silenced, but a repo can choose to treat one as advice.
+
+Once any rule sits below the threshold, **exit 0 stops meaning "no findings"** and starts meaning "nothing at or above the threshold". Printed output stays honest either way, since every finding is reported regardless of level and the summary line breaks down the counts. But a script, a CI job, or a person reading only the exit code cannot tell a clean run from a run with advisory findings. So report a clean run **with the threshold it ran at**: "clean at `--fail-on=error`, 2 info findings" rather than "clean". A phrase that hides which levels were counted gets quietly weaker every time a rule moves.
 
 `phrasePacks` opts into named vocabulary that stays out of the defaults. The `aggressive` pack bans `leverage`, `utilize`, `comprehensive`, `foster`, `nuanced`, and their neighbors: ordinary professional English that models overuse. Banning it grades writing quality rather than flagging machine authorship, so it belongs to a repo's voice rather than to every consumer of the linter. Pack entries still honor `bannedPhrases.remove`, and an unknown pack name exits 2 like an unknown rule.
 

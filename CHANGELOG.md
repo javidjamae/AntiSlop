@@ -6,7 +6,50 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
-_Nothing yet._
+### Added
+
+- Rule severity: `error`, `warn`, `info`. Findings carry a `severity`, and the
+  CLI gains `--fail-on=error|warn|info|never` to choose which levels decide the
+  exit code. Set per rule through a new `severities` map in
+  `antislop.config.json`, which takes either spelling of a rule name and also
+  applies to the always-on rules (they still cannot be disabled).
+- `--json` output gains `failing`, `failOn`, and a `counts` breakdown by level,
+  so a host scoring findings reads the weight off the finding instead of
+  maintaining its own table. ([#22](https://github.com/javidjamae/AntiSlop/issues/22))
+- An unrecognized `--flag` is now a usage error (exit 2) naming the valid
+  options, and an unknown top-level key in `antislop.config.json` throws
+  naming the valid keys. Both used to be ignored in silence. The typos this
+  feature invites are `--failon=never` and `severity` for `severities`, and
+  either one would otherwise leave the run gating while the author believed
+  gating was off.
+- `Object.keys(DEFAULT_SEVERITY)` is the rule-ID list, which lets a consumer
+  drift-test the always-on rules that no `RuleSet` toggle can reach.
+  `DEFAULT_SEVERITY` has a null prototype, so an inherited member name misses
+  instead of returning a function that would silently never gate. Every normal
+  access still works, including `Object.keys`, `in`, spread, `JSON.stringify`
+  and `Object.hasOwn`. Calling `DEFAULT_SEVERITY.hasOwnProperty(...)` on it
+  does not; use `Object.hasOwn(DEFAULT_SEVERITY, id)`.
+
+### Changed
+
+- Human-readable output prints the level per finding, as `[error]` before the
+  rule name. The summary line gains a breakdown only when a run is not
+  all-`error`, so an ordinary run reads as it did before. `--json` is the stable surface for
+  anything parsing output.
+
+**Exit codes are unchanged for every existing config.** Every rule that ships
+declares `error` and the default threshold is `error`, so the same runs pass and
+the same runs fail. Severity itself is opt-in.
+
+Note one consequence once a rule IS moved below the threshold: exit 0 stops
+meaning "no findings" and starts meaning "nothing at or above the threshold".
+Printed output stays honest, since every finding is reported whatever its level
+and the summary breaks down the counts, but anything reading only the exit code
+cannot tell the two apart. Report a clean run with the threshold it ran at.
+
+What else changes for everyone is the human-readable output above: each finding
+now carries a `[level]` prefix. Anything parsing stdout will see it. `--json`
+is the surface to parse, and it gained fields rather than changing any.
 
 ## 0.4.0 (2026-08-21)
 

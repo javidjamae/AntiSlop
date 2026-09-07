@@ -139,6 +139,35 @@ also accepts the rule ID itself as an alias: `"arrow-symbol": false` and
 valid names rather than being silently ignored, because a config that looks
 applied while doing nothing is the worst outcome available here.
 
+## Severity
+
+Every rule carries a severity: `error`, `warn`, or `info`. **Every rule that
+ships today is `error`**, and the CLI fails on `error` by default, so the exit
+code contract is what it has always been.
+
+A rule below `error` still runs and still reports; it stops deciding the exit
+code. That distinction exists because the precision bar in this project is a
+consequence of *gating* rather than of reporting: a rule with a false-positive
+tail defaults off because a linter that cries wolf gets ignored. A finding that does
+not fail a build does not cry wolf, so a real tell that needs a human read in
+context can ship as `info` without a measured precision number, labelled as
+uncalibrated, and never promoted above `info` until it has one.
+
+Set it per rule in `antislop.config.json`:
+
+```json
+{ "severities": { "em-dash": "warn", "reversed-antithesis": "info" } }
+```
+
+Move the threshold for a single run with `--fail-on=error|warn|info|never`.
+`--fail-on=never` prints every finding and never fails on one. Usage
+errors are unaffected: a broken config or an unreadable file still exits 2.
+
+Reclassifying an EXISTING rule below `error` is a breaking change even though
+it loosens rather than tightens: it silently turns a red pipeline green, which
+is the one failure mode here that nobody notices. Adding a new rule at `info`
+is not, because it cannot turn a green build red.
+
 ## Vocabulary packs
 
 The default phrase list holds vocabulary with a low rate in human writing and

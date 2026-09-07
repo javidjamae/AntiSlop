@@ -10,11 +10,79 @@
 // Several rules and the default phrase list draw on Wikipedia's "Signs of AI
 // writing" and blader/humanizer (MIT).
 
+/** How much a finding matters. `error` fails the run, `warn` and `info` report
+ *  without failing (see the CLI's --fail-on). Absent means `error`: severity is
+ *  optional on the type so existing consumers that CONSTRUCT a Violation to
+ *  hand to format() keep type-checking, while lint() always populates it. */
+export type Severity = 'error' | 'warn' | 'info'
+
+/** Ascending, so a threshold comparison is a number comparison. */
+export const SEVERITY_RANK: Record<Severity, number> = { info: 0, warn: 1, error: 2 }
+
 export interface Violation {
   line: number
   rule: string
   excerpt: string
   suggestion?: string
+  /** Absent means `error`. */
+  severity?: Severity
+}
+
+/**
+ * Per-rule default severity. EVERY rule that exists today is `error`, which is
+ * what keeps this change additive: exit codes are byte-identical for every
+ * existing config. A rule enters below `error` only when it is deliberately
+ * advisory — a real tell that needs a human read in context and cannot carry a
+ * measured precision number, where failing a build would teach people to
+ * ignore the linter.
+ *
+ * Keyed by rule ID as printed in findings. The dynamic families use their
+ * collective key: `banned-opener`, `banned-phrase`, `custom`.
+ */
+export const DEFAULT_SEVERITY: Record<string, Severity> = Object.assign(Object.create(null), {
+  'unicode-bold': 'error',
+  'engagement-bait': 'error',
+  'invisible-unicode': 'error',
+  'em-dash': 'error',
+  ellipsis: 'error',
+  'arrow-symbol': 'error',
+  'horizontal-rule': 'error',
+  'contrast-slop': 'error',
+  'reversed-antithesis': 'error',
+  'inline-header-bullet': 'error',
+  'emoji-decoration': 'error',
+  'bold-overuse': 'error',
+  'heading-dependent-opener': 'error',
+  'demonstrative-heading': 'error',
+  'reveal-shape': 'error',
+  'banned-opener': 'error',
+  'banned-phrase': 'error',
+  custom: 'error',
+  // Null prototype, matching KEY_TO_RULE_ID in config.ts and for the same
+  // reason: an inherited member name must be a MISS, not a truthy hit. A rule
+  // ID colliding with an Object.prototype member would otherwise resolve to a
+  // function, and SEVERITY_RANK[thatFunction] is undefined, so the comparison
+  // in the CLI would be false and the finding would silently never gate.
+})
+
+/**
+ * The family a printed rule ID belongs to, for severity lookup. Three rules
+ * report a per-instance ID (`banned opener: "here's why"`, `custom: my-rule`),
+ * so an exact-match table would never reach them.
+ */
+export function severityFamily(rule: string): string {
+  if (rule.startsWith('banned opener:')) return 'banned-opener'
+  if (rule.startsWith('banned phrase:')) return 'banned-phrase'
+  if (rule.startsWith('custom:')) return 'custom'
+  return rule
+}
+
+/** Resolve a printed rule ID to its severity. Overrides beat defaults; a
+ *  custom rule may be addressed individually (`custom: my-rule`) or as a
+ *  family (`custom`), individual first. */
+export function severityOf(rule: string, overrides: Record<string, Severity> = {}): Severity {
+  const family = severityFamily(rule)
+  return overrides[rule] ?? overrides[family] ?? DEFAULT_SEVERITY[family] ?? 'error'
 }
 
 export interface RuleSet {
@@ -310,6 +378,8 @@ export interface LintExtras {
    *  trailingCta: a "→" ending a line or a link text (the external-link CTA
    *  convention some sites use) stops being a finding. */
   arrows?: { trailingCta?: boolean }
+  /** Per-rule severity overrides, keyed by rule ID (see severityOf). */
+  severities?: Record<string, Severity>
 }
 
 // Universal arrow exemptions (breadcrumb/pipeline, leading back-link) plus the
@@ -367,14 +437,15 @@ export function lint(
     acc += line.length + 1
   }
 
+  const sev = (rule: string) => severityOf(rule, extras.severities)
   const push = (li: number, col: number, rule: string, suggestion: string) => {
     if (mask[lineStarts[li] + col]) return
-    violations.push({ line: li + 1, rule, excerpt: lines[li].trim().slice(0, 80), suggestion })
+    violations.push({ line: li + 1, rule, excerpt: lines[li].trim().slice(0, 80), suggestion, severity: sev(rule) })
   }
   // For rules where the skip mask must NOT apply: a hidden character inside a
   // code block or quote is more suspicious, not less.
   const pushAlways = (li: number, rule: string, suggestion: string) => {
-    violations.push({ line: li + 1, rule, excerpt: lines[li].trim().slice(0, 80), suggestion })
+    violations.push({ line: li + 1, rule, excerpt: lines[li].trim().slice(0, 80), suggestion, severity: sev(rule) })
   }
 
   lines.forEach((line, li) => {
@@ -563,10 +634,10 @@ export function lint(
 
   // Structural rules (markdown-aware, multi-line).
   if (rules.headingDependentOpener) {
-    for (const v of headingDependentOpeners(text)) violations.push(v)
+    for (const v of headingDependentOpeners(text)) violations.push({ ...v, severity: sev(v.rule) })
   }
   if (rules.demonstrativeHeading) {
-    for (const v of demonstrativeHeadings(text)) violations.push(v)
+    for (const v of demonstrativeHeadings(text)) violations.push({ ...v, severity: sev(v.rule) })
   }
 
   return violations.sort((a, b) => a.line - b.line)
@@ -643,6 +714,9 @@ export { VERSION } from './version.js'
 
 export function format(violations: Violation[]): string {
   return violations
-    .map((v) => `- line ${v.line}: ${v.rule} ("${v.excerpt}")${v.suggestion ? ` — ${v.suggestion}` : ''}`)
+    .map(
+      (v) =>
+        `- line ${v.line}: [${v.severity ?? 'error'}] ${v.rule} ("${v.excerpt}")${v.suggestion ? ` — ${v.suggestion}` : ''}`
+    )
     .join('\n')
 }
