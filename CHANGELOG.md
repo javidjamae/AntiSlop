@@ -24,6 +24,11 @@ all from one commit. The tag is the version consumers pin.
   gating was off.
 - `Object.keys(DEFAULT_SEVERITY)` is the rule-ID list, which lets a consumer
   drift-test the always-on rules that no `RuleSet` toggle can reach.
+  `DEFAULT_SEVERITY` has a null prototype, so an inherited member name misses
+  instead of returning a function that would silently never gate. Every normal
+  access still works, including `Object.keys`, `in`, spread, `JSON.stringify`
+  and `Object.hasOwn`. Calling `DEFAULT_SEVERITY.hasOwnProperty(...)` on it
+  does not; use `Object.hasOwn(DEFAULT_SEVERITY, id)`.
 
 ### Changed
 
