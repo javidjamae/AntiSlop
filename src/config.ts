@@ -117,6 +117,10 @@ function normalizeRuleOverrides(raw: Partial<RuleSet> | Record<string, boolean>)
   const out: Partial<RuleSet> = {}
   const valid = new Set(Object.keys(NEUTRAL))
   for (const [key, value] of Object.entries(raw)) {
+    // A comment belongs where the decision it explains lives, so the `//`
+    // exemption reaches inside `rules` and `severities` too, not just the top
+    // level. Anything else unrecognized is still an error.
+    if (isNestedCommentKey(key)) continue
     if (valid.has(key)) {
       out[key as keyof RuleSet] = value as boolean
       continue
@@ -165,6 +169,8 @@ function normalizeSeverities(
   const out: Record<string, Severity> = {}
   const customIds = new Set(customRules.map((r) => r.id))
   for (const [key, value] of Object.entries(raw)) {
+    // Before the value check: a comment's value is prose, not a severity.
+    if (isNestedCommentKey(key)) continue
     if (!VALID_SEVERITIES.has(value)) {
       throw new Error(
         `antislop config: severity for "${key}" must be one of error, warn, info (got ${JSON.stringify(value)}).`
@@ -250,6 +256,12 @@ const KNOWN_CONFIG_KEYS = [
  *  error, which is the point of the check. */
 function isConfigMetadataKey(key: string): boolean {
   return key === '$schema' || key.startsWith('//')
+}
+
+/** Inside a nested block a `//` note is still a note, but `$schema` has no
+ *  meaning there, so only the comment convention carries down. */
+function isNestedCommentKey(key: string): boolean {
+  return key.startsWith('//')
 }
 
 export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {

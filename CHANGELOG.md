@@ -18,12 +18,17 @@ all from one commit. The tag is the version consumers pin.
   maintaining its own table. ([#22](https://github.com/javidjamae/AntiSlop/issues/22))
 - An unrecognized `--flag` is now a usage error (exit 2) naming the valid
   options, and an unknown top-level key in `antislop.config.json` throws
-  naming the valid keys. `$schema` and any key beginning with `//` are exempt:
-  JSON has no slot for an editor hint or a comment, so config formats grow
-  those two conventions, and neither is a typo. Both used to be ignored in silence. The typos this
+  naming the valid keys. Both used to be ignored in silence. The typos this
   feature invites are `--failon=never` and `severity` for `severities`, and
   either one would otherwise leave the run gating while the author believed
   gating was off.
+- Two config keys are exempt from that check, because JSON has no slot for
+  either and config formats grow conventions to fill the gap: `$schema`, which
+  is how an editor offers completion, and any key beginning with `//`, which is
+  a note to the next reader. A `//` key works at the top level and inside
+  `rules` and `severities`, where the decisions worth annotating live. Both are
+  declared on `AntislopConfig`, so a consumer generating a config in TypeScript
+  can write them too.
 - `Object.keys(DEFAULT_SEVERITY)` is the rule-ID list, which lets a consumer
   drift-test the always-on rules that no `RuleSet` toggle can reach.
   `DEFAULT_SEVERITY` has a null prototype, so an inherited member name misses

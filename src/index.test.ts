@@ -640,6 +640,33 @@ test('config: an unknown top-level key throws instead of resolving to nothing', 
   )
 })
 
+test('CLI: $schema and // comments survive a real config file on disk', () => {
+  // resolveConfig unit tests sit one layer below the surface a user drives.
+  // The real path is a JSON file discovered from disk, through loadConfig and
+  // the CLI's own {...cfg} spreads for --strict and --pack.
+  const dir = mkdtempSync(join(tmpdir(), 'antislop-meta-'))
+  const cfgPath = join(dir, 'antislop.config.json')
+  const write = (o: unknown) => writeFileSync(cfgPath, JSON.stringify(o))
+
+  write({ $schema: 'https://example.com/s.json', profile: 'strict' })
+  assert.equal(runCli([`--config=${cfgPath}`], 'An ordinary sentence.\n').code, 0)
+
+  // A comment beside the decision it explains, at both levels, plus --strict
+  // so the CLI's profile spread runs over the same object.
+  write({
+    '//': 'house style',
+    rules: { '// emDash': 'we keep it on for now', emDash: true },
+    severities: { '// em-dash': 'advisory here', 'em-dash': 'info' },
+  })
+  const r = runCli([`--config=${cfgPath}`, '--strict'], 'A sentence \u2014 with a dash.\n')
+  assert.equal(r.code, 0, 'em-dash demoted to info, so the default error gate passes')
+  assert.match(r.stdout, /\[info\] em-dash/)
+
+  // The exemption must not become a hole: a real typo still exits 2.
+  write({ severity: { 'em-dash': 'info' } })
+  assert.equal(runCli([`--config=${cfgPath}`], 'text\n').code, 2)
+})
+
 test('CLI: --json carries the severity counts and the gate that was applied', () => {
   const r = runCli(['--strict', '--json'], 'A sentence — with a dash.\n')
   const out = JSON.parse(r.stdout)
