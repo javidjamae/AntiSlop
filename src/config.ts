@@ -53,6 +53,15 @@ export interface AntislopConfig {
    *  --fail-on=error. Unlike `rules`, always-on rules accept a severity: they
    *  cannot be silenced, but a site may choose to treat one as advisory. */
   severities?: Record<string, Severity>
+  /** Editor completion hint. Ignored by the linter, and declared here so a
+   *  consumer that GENERATES a config in TypeScript can write the key the
+   *  runtime accepts. A type that rejects what the runtime allows is the same
+   *  bug as the reverse, just discovered at a different hour. */
+  $schema?: string
+  /** A note to the next reader. JSON has no comments, so any key beginning
+   *  with `//` is ignored: `"//"` for one, or `"// severities"` to sit next to
+   *  what it explains. */
+  [comment: `//${string}`]: unknown
 }
 
 export interface CompiledCustomRule {
