@@ -18,7 +18,9 @@ all from one commit. The tag is the version consumers pin.
   maintaining its own table. ([#22](https://github.com/javidjamae/AntiSlop/issues/22))
 - An unrecognized `--flag` is now a usage error (exit 2) naming the valid
   options, and an unknown top-level key in `antislop.config.json` throws
-  naming the valid keys. Both used to be ignored in silence. The typos this
+  naming the valid keys. `$schema` and any key beginning with `//` are exempt:
+  JSON has no slot for an editor hint or a comment, so config formats grow
+  those two conventions, and neither is a typo. Both used to be ignored in silence. The typos this
   feature invites are `--failon=never` and `severity` for `severities`, and
   either one would otherwise leave the run gating while the author believed
   gating was off.

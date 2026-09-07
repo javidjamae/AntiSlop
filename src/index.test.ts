@@ -620,6 +620,11 @@ test('config: an unknown top-level key throws instead of resolving to nothing', 
     /unknown key "severity"/
   )
   assert.throws(() => resolveConfig({ rulez: {} } as never), /unknown key "rulez"/)
+  // $schema and // comments are conventions, not typos: JSON has no slot for
+  // either, so config formats grow them. Rejecting them fails a helpful config.
+  assert.doesNotThrow(() => resolveConfig({ $schema: 'https://x/s.json', profile: 'strict' } as never))
+  assert.doesNotThrow(() => resolveConfig({ '//': 'our house style', profile: 'strict' } as never))
+  assert.doesNotThrow(() => resolveConfig({ '// severities': 'why we demoted em-dash' } as never))
   // Every documented key still resolves.
   assert.doesNotThrow(() =>
     resolveConfig({

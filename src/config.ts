@@ -233,11 +233,23 @@ const KNOWN_CONFIG_KEYS = [
   'severities',
 ] as const
 
+/** JSON has no comments and no schema slot, so config formats grow two
+ *  conventions to fill the gap: `$schema` for editor completion, and a `//`
+ *  key for a note to the next reader. Both are ubiquitous, neither is a typo,
+ *  and rejecting them turns a helpful config into a failed run. They are
+ *  ignored rather than validated. Anything else unrecognized is still an
+ *  error, which is the point of the check. */
+function isConfigMetadataKey(key: string): boolean {
+  return key === '$schema' || key.startsWith('//')
+}
+
 export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
   for (const key of Object.keys(cfg)) {
+    if (isConfigMetadataKey(key)) continue
     if (!(KNOWN_CONFIG_KEYS as readonly string[]).includes(key)) {
       throw new Error(
-        `antislop config: unknown key "${key}". Valid keys: ${[...KNOWN_CONFIG_KEYS].sort().join(', ')}.`
+        `antislop config: unknown key "${key}". Valid keys: ${[...KNOWN_CONFIG_KEYS].sort().join(', ')}.` +
+          ` ("$schema" and keys beginning with "//" are ignored, for editor hints and comments.)`
       )
     }
   }
