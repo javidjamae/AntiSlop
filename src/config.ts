@@ -10,6 +10,7 @@ import {
   DEFAULT_BANNED_PHRASES,
   PHRASE_PACKS,
   DEFAULT_SEVERITY,
+  straighten,
   type RuleSet,
   type Severity,
   type LintExtras,
@@ -264,6 +265,21 @@ function isNestedCommentKey(key: string): boolean {
   return key.startsWith('//')
 }
 
+/** The same unknown-key reasoning, one level down. `{bannedPhrases: {remvoe:
+ *  [...]}}` resolved clean and left the phrase firing, which is the exact
+ *  symptom this file exists to refuse. */
+function checkNestedKeys(value: unknown, allowed: readonly string[], path: string): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return
+  for (const key of Object.keys(value)) {
+    if (isNestedCommentKey(key)) continue
+    if (!allowed.includes(key)) {
+      throw new Error(
+        `antislop config: unknown key "${key}" in ${path}. Valid keys: ${[...allowed].sort().join(', ')}.`
+      )
+    }
+  }
+}
+
 export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
   for (const key of Object.keys(cfg)) {
     if (isConfigMetadataKey(key)) continue
@@ -279,6 +295,10 @@ export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
 
   // Packs resolve BEFORE `bannedPhrases.remove` applies, so a site can opt
   // into a pack and drop a single entry it legitimately uses.
+  checkNestedKeys(cfg.bannedPhrases, ['add', 'remove'], 'bannedPhrases')
+  checkNestedKeys(cfg.openers, ['add', 'remove'], 'openers')
+  checkNestedKeys(cfg.arrowExemptions, ['trailingCta'], 'arrowExemptions')
+
   const packed: string[] = []
   for (const name of cfg.phrasePacks ?? []) {
     const pack = PHRASE_PACKS[name]
@@ -290,27 +310,43 @@ export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
     packed.push(...pack)
   }
 
+  // Normalize exactly as lint() does before matching: lowercase AND straighten
+  // the apostrophe. Comparing raw strings here is what made `remove` silently
+  // fail — the list ships smart-quoted entries, macOS text fields produce smart
+  // quotes, and either mismatch left a phrase the author had removed still
+  // firing. Dedupe too, so a `remove` that misses cannot be masked by a
+  // duplicate and so a consumer displaying the list sees each phrase once.
+  const norm = (p: string) => straighten(p.toLowerCase()).trim()
+  // A blank entry (a stray comma in a hand-edited array) compiles to `\b\b`,
+  // which matches every non-empty line and buries the real findings under a
+  // finding on all of them. Drop it rather than ship that.
+  const uniq = (list: string[]) => [...new Set(list.filter(Boolean))]
+
   let banned: string[]
   if (Array.isArray(cfg.bannedPhrases)) {
-    banned = [...cfg.bannedPhrases.map((p) => p.toLowerCase()), ...packed]
+    banned = uniq([...cfg.bannedPhrases.map(norm), ...packed.map(norm)])
   } else {
-    const remove = new Set((cfg.bannedPhrases?.remove ?? []).map((p) => p.toLowerCase()))
-    banned = [
-      ...DEFAULT_BANNED_PHRASES.filter((p) => !remove.has(p)),
-      ...packed.filter((p) => !remove.has(p)),
-      ...(cfg.bannedPhrases?.add ?? []).map((p) => p.toLowerCase()),
-    ]
+    const remove = new Set((cfg.bannedPhrases?.remove ?? []).map(norm))
+    banned = uniq([
+      ...DEFAULT_BANNED_PHRASES.map(norm).filter((p) => !remove.has(p)),
+      ...packed.map(norm).filter((p) => !remove.has(p)),
+      ...(cfg.bannedPhrases?.add ?? []).map(norm),
+    ])
   }
 
-  const removeOpeners = new Set((cfg.openers?.remove ?? []).map((p) => p.toLowerCase()))
-  const openers = [
-    ...BANNED_OPENERS.filter((p) => !removeOpeners.has(p)),
-    ...(cfg.openers?.add ?? []).map((p) => p.toLowerCase()),
-  ]
+  const removeOpeners = new Set((cfg.openers?.remove ?? []).map(norm))
+  const openers = uniq([
+    ...BANNED_OPENERS.map(norm).filter((p) => !removeOpeners.has(p)),
+    ...(cfg.openers?.add ?? []).map(norm),
+  ])
 
+  // Straightened for the same reason the phrase lists are: lint() straightens
+  // the text before matching, so a pattern carrying U+2019 can never match
+  // anything. A site author writing a custom rule in a macOS text field would
+  // otherwise get a rule that silently never fires.
   const customRules: CompiledCustomRule[] = (cfg.customRules ?? []).map((r) => ({
     id: r.id,
-    re: new RegExp(r.pattern, r.flags ?? 'i'),
+    re: new RegExp(straighten(r.pattern), r.flags ?? 'i'),
     suggestion: r.suggestion,
   }))
 

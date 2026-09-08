@@ -164,11 +164,23 @@ export const BANNED_OPENERS = [
   'in this post',
 ]
 
+/**
+ * Fold the typographic apostrophe to the ASCII one. U+2019 is ONE code unit,
+ * same as U+0027, so this is index-preserving: every offset, mask position and
+ * excerpt computed on the result stays valid against the original.
+ *
+ * Exported because matching and CONFIGURING have to agree. `lint()` straightens
+ * both the text and the phrase list, so a config that removes a phrase must
+ * straighten both sides too, or the removal silently fails to take: the curly
+ * twin survives and keeps firing on text the author believed they had exempted.
+ */
+export const straighten = (s: string): string => s.replace(/\u2019/g, "'")
+
 export const DEFAULT_BANNED_PHRASES = [
   'the reality is', 'the truth is',
   "i'll be honest", 'frankly', 'frankly speaking',
   'game-changer', 'game changer', 'cutting-edge', 'seamless', 'seamlessly', 'robust',
-  'in today’s landscape', "in today's landscape", "in today's world", "in today's environment",
+  "in today's landscape", "in today's world", "in today's environment",
   'straightforward', "it's worth noting", 'it bears mentioning',
   'in conclusion', 'to sum up', 'the bottom line',
   'navigate challenges', 'navigate obstacles', 'navigate the',
@@ -182,7 +194,7 @@ export const DEFAULT_BANNED_PHRASES = [
   // High-frequency AI vocabulary
   'delve', 'delves', 'delving', 'tapestry', 'interplay',
   // Filler / negative parallelism
-  "it's important to note", 'it’s important to note', 'it is important to note',
+  "it's important to note", 'it is important to note',
   'not just about',
   // Chatbot-correspondence artifacts pasted into content
   'i hope this helps', 'let me know if you', 'would you like me to',
@@ -197,8 +209,7 @@ export const DEFAULT_BANNED_PHRASES = [
   'at the end of the day', 'all things considered', 'in the final analysis',
   // Marketing puffery, same family as "boasts"/"breathtaking"
   'best-in-class', 'world-class', 'next-generation',
-  "in today's fast-paced world", 'in today’s fast-paced world',
-  "in today's digital age", 'in today’s digital age',
+  "in today's fast-paced world", "in today's digital age",
 ]
 
 /**
@@ -419,7 +430,6 @@ export function lint(
   // `isn’t a rewrite. It’s a rename` was clean, and the same held for the
   // reveal-shape and banned-opener families. The rule that most needed to fire
   // on model output was the one blind to how model output is punctuated.
-  const straighten = (s: string) => s.replace(/’/g, "'")
   const text = straighten(raw)
   banned = banned.map(straighten)
   const openers = (extras.openers ?? BANNED_OPENERS).map(straighten)
@@ -654,7 +664,11 @@ const REFERRING_OPENER = new RegExp(`^(${REFERRING})(\\s+(${BARE_VERB})\\b|\\s*[
 
 export function headingDependentOpeners(md: string): Violation[] {
   const out: Violation[] = []
-  const lines = md.replace(/\r\n/g, '\n').split('\n')
+  // Straighten here too, not only in lint(). These are public exports and
+  // their patterns are contraction-bearing and ASCII-only, so a direct caller
+  // passing smart-quoted prose would silently get nothing. Straightening is
+  // index-preserving, so the line numbers below stay correct.
+  const lines = straighten(md).replace(/\r\n/g, '\n').split('\n')
   for (let i = 0; i < lines.length; i++) {
     const h = lines[i].match(/^#{2,6}\s+(.+)/)
     if (!h) continue
@@ -685,7 +699,11 @@ const DEMONSTRATIVE_FINALS = new Set(['it', 'this', 'that'])
 
 export function demonstrativeHeadings(md: string): Violation[] {
   const out: Violation[] = []
-  const lines = md.replace(/\r\n/g, '\n').split('\n')
+  // Straighten here too, not only in lint(). These are public exports and
+  // their patterns are contraction-bearing and ASCII-only, so a direct caller
+  // passing smart-quoted prose would silently get nothing. Straightening is
+  // index-preserving, so the line numbers below stay correct.
+  const lines = straighten(md).replace(/\r\n/g, '\n').split('\n')
   let inFence = false
   lines.forEach((line, i) => {
     if (/^\s*```/.test(line)) inFence = !inFence

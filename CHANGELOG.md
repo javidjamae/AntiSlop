@@ -37,6 +37,35 @@ all from one commit. The tag is the version consumers pin.
   and `Object.hasOwn`. Calling `DEFAULT_SEVERITY.hasOwnProperty(...)` on it
   does not; use `Object.hasOwn(DEFAULT_SEVERITY, id)`.
 
+### Fixed
+
+- `bannedPhrases.remove` and `openers.remove` now take, whichever apostrophe
+  either side is typed with. `lint()` straightens the text and the phrase list
+  before matching, but `resolveConfig` compared raw strings, so removing
+  `in today's landscape` left its smart-quoted twin in the list and the phrase
+  kept firing on both spellings. A `remove` entry typed with the smart quote a
+  macOS text field produces matched nothing at all. The removal looked applied
+  and silently was not. ([#25](https://github.com/javidjamae/AntiSlop/issues/25))
+- `DEFAULT_BANNED_PHRASES` no longer ships apostrophe twins: 76 entries become
+  72. Matching straightens the list, so the four smart-quoted duplicates never
+  caught anything their straight spellings missed. Both spellings still fire,
+  because the text is straightened too. A consumer reading the list sees each
+  phrase once, and so does anyone counting them.
+- Resolved phrase and opener lists are deduped, so a `remove` that misses
+  cannot be masked by a second copy.
+- A `customRules` pattern is straightened too, so a rule typed with a smart
+  apostrophe fires instead of silently never matching.
+- A misspelled key inside `bannedPhrases`, `openers` or `arrowExemptions` now
+  throws, the way a misspelled top-level key already did. Writing `remvoe` for
+  `remove` used to resolve clean and leave the phrase firing.
+- A blank phrase entry is dropped rather than compiled. `""` became `\b\b`,
+  which matches every non-empty line, so one stray comma in a hand-edited array
+  buried every real finding under a finding on all of them.
+- `headingDependentOpeners` and `demonstrativeHeadings` straighten their own
+  input. They are public exports and their patterns are contraction-bearing, so
+  a host calling them directly on smart-quoted prose got nothing back. `lint()`
+  was unaffected, since it straightens first.
+
 ### Changed
 
 - Human-readable output prints the level per finding, as `[error]` before the
