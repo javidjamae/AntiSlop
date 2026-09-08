@@ -147,6 +147,51 @@ test('config: a phrase removal takes, whichever apostrophe either side uses', ()
   assert.ok(lint('We delve into it.', NEUTRAL, straightRemove.banned).length > 0)
 })
 
+test('config: a custom rule pattern matches whichever apostrophe it is typed with', () => {
+  // Same reasoning as the phrase lists: lint() straightens the text, so a
+  // pattern carrying U+2019 could never match. Written in a macOS text field,
+  // the rule silently never fired.
+  const curly = resolveConfig({ customRules: [{ id: 'x', pattern: 'it\u2019s our thing' }] })
+  const hits = lint('So it\u2019s our thing now.', NEUTRAL, curly.banned, toLintExtras(curly))
+  assert.ok(hits.some((v) => v.rule === 'custom: x'))
+  // and the straight spelling of the pattern still matches curly text
+  const straight = resolveConfig({ customRules: [{ id: 'y', pattern: "it's our thing" }] })
+  assert.ok(
+    lint('So it\u2019s our thing now.', NEUTRAL, straight.banned, toLintExtras(straight)).some(
+      (v) => v.rule === 'custom: y'
+    )
+  )
+})
+
+test('config: a misspelled key inside an option throws, like a top-level one', () => {
+  // `{bannedPhrases: {remvoe: [...]}}` used to resolve clean and leave the
+  // phrase firing — the top-level reasoning, one level down.
+  assert.throws(() => resolveConfig({ bannedPhrases: { remvoe: ['robust'] } } as never), /unknown key "remvoe" in bannedPhrases/)
+  assert.throws(() => resolveConfig({ openers: { add: [], reomve: [] } } as never), /unknown key "reomve" in openers/)
+  assert.throws(() => resolveConfig({ arrowExemptions: { trailingCTA: true } } as never), /unknown key "trailingCTA" in arrowExemptions/)
+  // The array form of bannedPhrases is not an options object and is unaffected.
+  assert.doesNotThrow(() => resolveConfig({ bannedPhrases: ['flurgle'] }))
+  // A comment is still allowed here too.
+  assert.doesNotThrow(() => resolveConfig({ bannedPhrases: { '// remove': 'why', remove: ['robust'] } } as never))
+})
+
+test('config: a blank phrase entry cannot match every line', () => {
+  // "" compiles to \b\b, which matches every non-empty line and buries the
+  // real findings. A stray comma in a hand-edited array is enough to cause it.
+  const r = resolveConfig({ bannedPhrases: { add: ['delve', '', '   '] } })
+  assert.ok(!r.banned.includes(''))
+  const hits = lint('One ordinary line.\nA second ordinary line.\n', NEUTRAL, r.banned)
+  assert.equal(hits.length, 0)
+})
+
+test('the structural rule exports straighten their own input', () => {
+  // Public exports, called directly by a host that does its own assembly.
+  // lint() straightens first; a direct caller does not, and the patterns are
+  // contraction-bearing and ASCII-only.
+  assert.equal(headingDependentOpeners("## The rename\n\nIt's, in short, a rename.\n").length, 1)
+  assert.equal(headingDependentOpeners('## The rename\n\nIt\u2019s, in short, a rename.\n').length, 1)
+})
+
 test('config: resolved lists carry each phrase once', () => {
   // A duplicate is harmless for matching but masks a removal that missed, and
   // a consumer displaying the list sees the phrase twice. (#25)
@@ -163,7 +208,11 @@ test('the shipped phrase list carries no apostrophe twins', () => {
   assert.equal(DEFAULT_BANNED_PHRASES.filter((p) => p.includes('\u2019')).length, 0)
   assert.equal(new Set(DEFAULT_BANNED_PHRASES.map(straighten)).size, DEFAULT_BANNED_PHRASES.length)
   // and a curly-spelled phrase still fires, because lint straightens the text
-  assert.ok(lint('In today\u2019s digital age we ship.', NEUTRAL).length > 0)
+  assert.ok(
+    lint('In today\u2019s digital age we ship.', NEUTRAL).some((v) =>
+      v.rule.includes("in today's digital age")
+    )
+  )
 })
 
 test('config: array form replaces the phrase list wholesale', () => {

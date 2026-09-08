@@ -53,6 +53,18 @@ all from one commit. The tag is the version consumers pin.
   phrase once, and so does anyone counting them.
 - Resolved phrase and opener lists are deduped, so a `remove` that misses
   cannot be masked by a second copy.
+- A `customRules` pattern is straightened too, so a rule typed with a smart
+  apostrophe fires instead of silently never matching.
+- A misspelled key inside `bannedPhrases`, `openers` or `arrowExemptions` now
+  throws, the way a misspelled top-level key already did. `{"bannedPhrases":
+  {"remvoe": [...]}}` used to resolve clean and leave the phrase firing.
+- A blank phrase entry is dropped rather than compiled. `""` became `\b\b`,
+  which matches every non-empty line, so one stray comma in a hand-edited array
+  buried every real finding under a finding on all of them.
+- `headingDependentOpeners` and `demonstrativeHeadings` straighten their own
+  input. They are public exports and their patterns are contraction-bearing, so
+  a host calling them directly on smart-quoted prose got nothing back. `lint()`
+  was unaffected, since it straightens first.
 
 ### Changed
 

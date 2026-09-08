@@ -664,7 +664,11 @@ const REFERRING_OPENER = new RegExp(`^(${REFERRING})(\\s+(${BARE_VERB})\\b|\\s*[
 
 export function headingDependentOpeners(md: string): Violation[] {
   const out: Violation[] = []
-  const lines = md.replace(/\r\n/g, '\n').split('\n')
+  // Straighten here too, not only in lint(). These are public exports and
+  // their patterns are contraction-bearing and ASCII-only, so a direct caller
+  // passing smart-quoted prose would silently get nothing. Straightening is
+  // index-preserving, so the line numbers below stay correct.
+  const lines = straighten(md).replace(/\r\n/g, '\n').split('\n')
   for (let i = 0; i < lines.length; i++) {
     const h = lines[i].match(/^#{2,6}\s+(.+)/)
     if (!h) continue
@@ -695,7 +699,11 @@ const DEMONSTRATIVE_FINALS = new Set(['it', 'this', 'that'])
 
 export function demonstrativeHeadings(md: string): Violation[] {
   const out: Violation[] = []
-  const lines = md.replace(/\r\n/g, '\n').split('\n')
+  // Straighten here too, not only in lint(). These are public exports and
+  // their patterns are contraction-bearing and ASCII-only, so a direct caller
+  // passing smart-quoted prose would silently get nothing. Straightening is
+  // index-preserving, so the line numbers below stay correct.
+  const lines = straighten(md).replace(/\r\n/g, '\n').split('\n')
   let inFence = false
   lines.forEach((line, i) => {
     if (/^\s*```/.test(line)) inFence = !inFence
