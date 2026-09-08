@@ -40,6 +40,12 @@ _Nothing yet._
   configuration at all, and a sweep over found text covers what writers
   happened to write rather than what changed.
 
+  The test script is fixed too, and it was worth fixing carefully. It named a
+  single file, so these would have compiled and never run. `node --test dist/`
+  looks like the fix and is worse: it reports one passing test having executed
+  nothing. An explicit glob runs all four, and `ls` guards it, because
+  `node --test` on a glob matching nothing also exits 0.
+
 ## 0.5.0 (2026-09-08)
 
 ### Added
