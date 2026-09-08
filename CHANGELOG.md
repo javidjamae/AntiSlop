@@ -19,16 +19,17 @@ _Nothing yet._
   differently depending on which editor saved it: this repo's own `RULES.md`
   lints clean as committed and gained a `reversed-antithesis` finding when saved
   with Windows line endings. A lone `\r` folds too.
-- The CLI normalizes before splitting frontmatter, not only inside `lint()`.
-  `readFileSync` does not strip a BOM, so a leading one made `^---` fail: the
+- The CLI normalizes before splitting frontmatter. Doing it only inside
+  `lint()` was too late. `readFileSync` does not strip a BOM, so a leading one
+  made `^---` fail: the
   frontmatter was never split off, `title` and `description` stopped being
   linted as their own surfaces, and both `---` delimiters fell through to the
   body as `horizontal-rule` findings. A BOM'd file silently lost a real finding
   and gained two false ones.
 - A doubled leading BOM reports. Stripping the one legitimate file marker means
-  anything still at position 0 is an artifact — a concatenated export, or a
-  re-encode of a file that already had one — and the exemption that used to
-  cover it is gone.
+  anything still at position 0 is an artifact, such as a concatenated export or
+  a re-encode of a file that already had one. The exemption that used to cover
+  it is gone.
 - A misspelled key in a `customRules` entry throws instead of resolving
   cleanly. `flgs` silently defaulted flags to `i`, turning a case-sensitive rule
   case-insensitive; `sugestion` was silently dropped; and `patern` threw a raw
