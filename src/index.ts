@@ -176,6 +176,21 @@ export const BANNED_OPENERS = [
  */
 export const straighten = (s: string): string => s.replace(/\u2019/g, "'")
 
+/**
+ * Drop a leading byte-order mark.
+ *
+ * A BOM is an encoding marker, not content, and Windows editors and a good many
+ * export pipelines emit one. Left in place it sits in front of the first
+ * character of line 1, so `## Heading` stops matching `^##` and every rule
+ * anchored to the start of that line goes quiet. A document that opens with a
+ * heading, which is most documents, silently loses the heading rules on it.
+ *
+ * `invisible-unicode` deliberately does not report a BOM at file start, so
+ * nothing else was catching this either. Only the leading one is dropped: a BOM
+ * in the middle of a document IS an artifact worth reporting, and still is.
+ */
+export const stripBom = (s: string): string => (s.charCodeAt(0) === 0xfeff ? s.slice(1) : s)
+
 export const DEFAULT_BANNED_PHRASES = [
   'the reality is', 'the truth is',
   "i'll be honest", 'frankly', 'frankly speaking',
@@ -430,7 +445,7 @@ export function lint(
   // `isn’t a rewrite. It’s a rename` was clean, and the same held for the
   // reveal-shape and banned-opener families. The rule that most needed to fire
   // on model output was the one blind to how model output is punctuated.
-  const text = straighten(raw)
+  const text = stripBom(straighten(raw))
   banned = banned.map(straighten)
   const openers = (extras.openers ?? BANNED_OPENERS).map(straighten)
   // Longest first so a nested entry cannot claim the span ahead of the phrase
@@ -668,7 +683,7 @@ export function headingDependentOpeners(md: string): Violation[] {
   // their patterns are contraction-bearing and ASCII-only, so a direct caller
   // passing smart-quoted prose would silently get nothing. Straightening is
   // index-preserving, so the line numbers below stay correct.
-  const lines = straighten(md).replace(/\r\n/g, '\n').split('\n')
+  const lines = stripBom(straighten(md)).replace(/\r\n/g, '\n').split('\n')
   for (let i = 0; i < lines.length; i++) {
     const h = lines[i].match(/^#{2,6}\s+(.+)/)
     if (!h) continue
@@ -703,7 +718,7 @@ export function demonstrativeHeadings(md: string): Violation[] {
   // their patterns are contraction-bearing and ASCII-only, so a direct caller
   // passing smart-quoted prose would silently get nothing. Straightening is
   // index-preserving, so the line numbers below stay correct.
-  const lines = straighten(md).replace(/\r\n/g, '\n').split('\n')
+  const lines = stripBom(straighten(md)).replace(/\r\n/g, '\n').split('\n')
   let inFence = false
   lines.forEach((line, i) => {
     if (/^\s*```/.test(line)) inFence = !inFence

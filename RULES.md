@@ -86,6 +86,12 @@ matching English rather than machine authorship, and belongs off by default.
 Every default-on rule sits at or below 0.21 per 1,000 lines on the target
 register. `invisible-unicode` is higher and always on, and its hits are real.
 
+These numbers say how often a rule fires on real writing, which is what
+justifies a default. They are not a regression check and cannot be used as one:
+five rules never fire on the corpus at all, the corpus holds no configuration,
+and it contains whatever encoding its authors happened to use. The test suite
+carries engineered fixtures for that.
+
 Numbers here are pasted from a `npm run corpus` run, so
 [corpus/REPORT.md](corpus/REPORT.md) is the source of truth if the two ever
 disagree.

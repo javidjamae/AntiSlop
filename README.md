@@ -148,6 +148,8 @@ Precision claims are cheap, so every rule carries a number. `npm run corpus` fet
 | Human documents flagged, NEUTRAL | 7.6% |
 | Highest rate of any default-on rule, per 1,000 lines of target prose | 0.21 |
 
+The corpus measures; it does not guard. Those are different jobs and it only does the first. Five of the eighteen rules never fire on it at all, so a change to any of them is invisible to a sweep over it; it holds no configuration, so nothing about how the tool reads `antislop.config.json` is exercised; and it contains whatever encoding its authors happened to use, so a sweep can come back clean while being silent on the construct that changed. Regressions are caught by engineered fixtures in the test suite instead, which is also why they are committed and the corpus is not.
+
 Corpus content is fetched at run time and never committed. Method, sources, and the sources evaluated and rejected are in [corpus/README.md](corpus/README.md); the current report is at [javidjamae.github.io/AntiSlop](https://javidjamae.github.io/AntiSlop/) and refreshed monthly.
 
 ## Attribution

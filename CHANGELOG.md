@@ -6,7 +6,35 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
-_Nothing yet._
+### Fixed
+
+- A leading byte-order mark no longer silences the heading rules. A BOM is an
+  encoding marker that Windows editors and many export pipelines emit, and it
+  sat in front of the first character of line 1, so `## Heading` stopped
+  matching `^##` and a document opening with a heading, which is most
+  documents, quietly lost `heading-dependent-opener` and
+  `demonstrative-heading` on it. `invisible-unicode` deliberately does not
+  report a BOM at file start, so nothing else caught it either. Only the
+  leading one is stripped: a BOM mid-document is an artifact and still reports.
+
+### Added
+
+- `stripBom(s)` is exported alongside `straighten(s)`, so a host normalizing
+  input before handing it over can apply what `lint()` applies.
+- A contract and fixture test layer, 29 cases over what the package ships.
+  Property tests quantify over the shipped lists rather than restating them, so
+  an edit to a list is checked by the tests that already exist: every phrase
+  must fire in either apostrophe spelling, every rule that can fire must have a
+  severity entry and vice versa, and both spellings of a rule name must resolve
+  to the same rule. An encoding matrix runs every rule against smart quotes,
+  CRLF, a BOM and a trailing newline, which is what found the BOM bug above. A
+  config matrix covers the surface that had none: every option proven to take
+  effect, and a plausible typo of each proven to be refused.
+
+  The measured corpus cannot do this job, which is why it never caught any of
+  it. Five of the eighteen rules never fire on that corpus, it holds no
+  configuration at all, and a sweep over found text covers what writers
+  happened to write rather than what changed.
 
 ## 0.5.0 (2026-09-08)
 
