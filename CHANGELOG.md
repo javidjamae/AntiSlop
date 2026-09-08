@@ -6,6 +6,10 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.6.0 (2026-09-08)
+
 ### Fixed
 
 - A leading byte-order mark no longer silences the heading rules. A BOM is an
