@@ -344,11 +344,20 @@ export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
   // the text before matching, so a pattern carrying U+2019 can never match
   // anything. A site author writing a custom rule in a macOS text field would
   // otherwise get a rule that silently never fires.
-  const customRules: CompiledCustomRule[] = (cfg.customRules ?? []).map((r) => ({
-    id: r.id,
-    re: new RegExp(straighten(r.pattern), r.flags ?? 'i'),
-    suggestion: r.suggestion,
-  }))
+  const customRules: CompiledCustomRule[] = (cfg.customRules ?? []).map((r, i) => {
+    // The one config object with no key check. `flgs` silently defaulted to
+    // `i`, turning a case-sensitive rule case-insensitive; `sugestion` was
+    // silently dropped; and `patern` reached `straighten(undefined)` and threw
+    // a raw TypeError that the CLI printed as its config diagnostic.
+    checkNestedKeys(r, ['id', 'pattern', 'flags', 'suggestion'], `customRules[${i}]`)
+    if (typeof r?.id !== 'string' || !r.id) {
+      throw new Error(`antislop config: customRules[${i}] needs an "id".`)
+    }
+    if (typeof r.pattern !== 'string' || !r.pattern) {
+      throw new Error(`antislop config: custom rule "${r.id}" needs a "pattern".`)
+    }
+    return { id: r.id, re: new RegExp(straighten(r.pattern), r.flags ?? 'i'), suggestion: r.suggestion }
+  })
 
   return {
     rules,

@@ -8,6 +8,68 @@ all from one commit. The tag is the version consumers pin.
 
 _Nothing yet._
 
+## 0.6.0 (2026-09-08)
+
+### Fixed
+
+- Line endings no longer change findings. `lint()` split on `\n` without
+  folding CRLF, and a stray `\r` is a member of the bounded character classes
+  in `reversed-antithesis` and `contrast-slop`, where it both satisfies the
+  minimum length and consumes a slot against the maximum. The same prose linted
+  differently depending on which editor saved it: this repo's own `RULES.md`
+  lints clean as committed and gained a `reversed-antithesis` finding when saved
+  with Windows line endings. A lone `\r` folds too.
+- The CLI normalizes before splitting frontmatter. Doing it only inside
+  `lint()` was too late. `readFileSync` does not strip a BOM, so a leading one
+  made `^---` fail: the
+  frontmatter was never split off, `title` and `description` stopped being
+  linted as their own surfaces, and both `---` delimiters fell through to the
+  body as `horizontal-rule` findings. A BOM'd file silently lost a real finding
+  and gained two false ones.
+- A doubled leading BOM reports. Stripping the one legitimate file marker means
+  anything still at position 0 is an artifact, such as a concatenated export or
+  a re-encode of a file that already had one. The exemption that used to cover
+  it is gone.
+- A misspelled key in a `customRules` entry throws instead of resolving
+  cleanly. `flgs` silently defaulted flags to `i`, turning a case-sensitive rule
+  case-insensitive; `sugestion` was silently dropped; and `patern` threw a raw
+  TypeError that the CLI printed as its config diagnostic. A missing `id` or
+  `pattern` is now named.
+- A leading byte-order mark no longer silences the heading rules. A BOM is an
+  encoding marker that Windows editors and many export pipelines emit, and it
+  sat in front of the first character of line 1, so `## Heading` stopped
+  matching `^##` and a document opening with a heading, which is most
+  documents, quietly lost `heading-dependent-opener` and
+  `demonstrative-heading` on it. `invisible-unicode` deliberately does not
+  report a BOM at file start, so nothing else caught it either. Only the
+  leading one is stripped: a BOM mid-document is an artifact and still reports.
+
+### Added
+
+- `stripBom(s)` and `normalizeEol(s)` are exported alongside `straighten(s)`,
+  so a host normalizing input before handing it over can apply what `lint()`
+  applies.
+- A contract and fixture test layer, 29 cases over what the package ships.
+  Property tests quantify over the shipped lists rather than restating them, so
+  an edit to a list is checked by the tests that already exist: every phrase
+  must fire in either apostrophe spelling, every rule that can fire must have a
+  severity entry and vice versa, and both spellings of a rule name must resolve
+  to the same rule. An encoding matrix runs every rule against smart quotes,
+  CRLF, a BOM and a trailing newline, which is what found the BOM bug above. A
+  config matrix covers the surface that had none: every option proven to take
+  effect, and a plausible typo of each proven to be refused.
+
+  The measured corpus cannot do this job, which is why it never caught any of
+  it. Five of the eighteen rules never fire on that corpus, it holds no
+  configuration at all, and a sweep over found text covers what writers
+  happened to write rather than what changed.
+
+  The test script is fixed too, and it was worth fixing carefully. It named a
+  single file, so these would have compiled and never run. `node --test dist/`
+  looks like the fix and is worse: it reports one passing test having executed
+  nothing. An explicit glob runs all four, and `ls` guards it, because
+  `node --test` on a glob matching nothing also exits 0.
+
 ## 0.5.0 (2026-09-08)
 
 ### Added
