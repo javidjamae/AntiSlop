@@ -10,6 +10,7 @@ import {
   DEFAULT_BANNED_PHRASES,
   PHRASE_PACKS,
   DEFAULT_SEVERITY,
+  straighten,
   type RuleSet,
   type Severity,
   type LintExtras,
@@ -290,23 +291,32 @@ export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
     packed.push(...pack)
   }
 
+  // Normalize exactly as lint() does before matching: lowercase AND straighten
+  // the apostrophe. Comparing raw strings here is what made `remove` silently
+  // fail — the list ships smart-quoted entries, macOS text fields produce smart
+  // quotes, and either mismatch left a phrase the author had removed still
+  // firing. Dedupe too, so a `remove` that misses cannot be masked by a
+  // duplicate and so a consumer displaying the list sees each phrase once.
+  const norm = (p: string) => straighten(p.toLowerCase())
+  const uniq = (list: string[]) => [...new Set(list)]
+
   let banned: string[]
   if (Array.isArray(cfg.bannedPhrases)) {
-    banned = [...cfg.bannedPhrases.map((p) => p.toLowerCase()), ...packed]
+    banned = uniq([...cfg.bannedPhrases.map(norm), ...packed.map(norm)])
   } else {
-    const remove = new Set((cfg.bannedPhrases?.remove ?? []).map((p) => p.toLowerCase()))
-    banned = [
-      ...DEFAULT_BANNED_PHRASES.filter((p) => !remove.has(p)),
-      ...packed.filter((p) => !remove.has(p)),
-      ...(cfg.bannedPhrases?.add ?? []).map((p) => p.toLowerCase()),
-    ]
+    const remove = new Set((cfg.bannedPhrases?.remove ?? []).map(norm))
+    banned = uniq([
+      ...DEFAULT_BANNED_PHRASES.map(norm).filter((p) => !remove.has(p)),
+      ...packed.map(norm).filter((p) => !remove.has(p)),
+      ...(cfg.bannedPhrases?.add ?? []).map(norm),
+    ])
   }
 
-  const removeOpeners = new Set((cfg.openers?.remove ?? []).map((p) => p.toLowerCase()))
-  const openers = [
-    ...BANNED_OPENERS.filter((p) => !removeOpeners.has(p)),
-    ...(cfg.openers?.add ?? []).map((p) => p.toLowerCase()),
-  ]
+  const removeOpeners = new Set((cfg.openers?.remove ?? []).map(norm))
+  const openers = uniq([
+    ...BANNED_OPENERS.map(norm).filter((p) => !removeOpeners.has(p)),
+    ...(cfg.openers?.add ?? []).map(norm),
+  ])
 
   const customRules: CompiledCustomRule[] = (cfg.customRules ?? []).map((r) => ({
     id: r.id,

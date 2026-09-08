@@ -11,6 +11,8 @@ import {
   format,
   NEUTRAL,
   STRICT,
+  DEFAULT_BANNED_PHRASES,
+  straighten,
   DEFAULT_SEVERITY,
   SEVERITY_RANK,
   severityFamily,
@@ -122,6 +124,46 @@ test('config: custom rules fire as custom:<id> and honor the skip mask', () => {
   const extras = { openers: rc.openers, customRules: rc.customRules }
   assert.ok(lint('And we believe this works.', rc.rules, rc.banned, extras).some((v) => v.rule === 'custom: no-passive-belief'))
   assert.equal(lint('`we believe` is the phrase', rc.rules, rc.banned, extras).filter((v) => v.rule.startsWith('custom:')).length, 0)
+})
+
+test('config: a phrase removal takes, whichever apostrophe either side uses', () => {
+  // lint() straightens the text AND the list before matching, so a config that
+  // compares raw strings removes at most one spelling and the twin keeps
+  // firing on text the author believed they had exempted. Silent, and the
+  // config looks applied. (#25)
+  const straightRemove = resolveConfig({ bannedPhrases: { remove: ["in today's landscape"] } })
+  assert.equal(lint("In today's landscape we ship.", NEUTRAL, straightRemove.banned).length, 0)
+  assert.equal(lint('In today\u2019s landscape we ship.', NEUTRAL, straightRemove.banned).length, 0)
+
+  // The inverse: a macOS text field produces the curly one.
+  const curlyRemove = resolveConfig({ bannedPhrases: { remove: ['it\u2019s important to note'] } })
+  assert.equal(lint("It's important to note this.", NEUTRAL, curlyRemove.banned).length, 0)
+
+  // openers.remove has the same shape and had the same defect.
+  const o = resolveConfig({ openers: { remove: ['here\u2019s why'] } })
+  assert.equal(lint("Here's why this matters.", NEUTRAL, undefined, { openers: o.openers }).length, 0)
+
+  // A phrase that was NOT removed still fires, so the fix is not a blanket drop.
+  assert.ok(lint('We delve into it.', NEUTRAL, straightRemove.banned).length > 0)
+})
+
+test('config: resolved lists carry each phrase once', () => {
+  // A duplicate is harmless for matching but masks a removal that missed, and
+  // a consumer displaying the list sees the phrase twice. (#25)
+  const r = resolveConfig({ bannedPhrases: { add: ['delve'] } })
+  assert.equal(r.banned.filter((p) => p === 'delve').length, 1)
+  assert.equal(new Set(r.banned).size, r.banned.length)
+  assert.equal(new Set(r.openers).size, r.openers.length)
+})
+
+test('the shipped phrase list carries no apostrophe twins', () => {
+  // Both spellings used to ship as separate entries. Since matching straightens
+  // the list, the curly ones never caught anything the straight ones missed —
+  // they were dead weight that also made `remove` look broken.
+  assert.equal(DEFAULT_BANNED_PHRASES.filter((p) => p.includes('\u2019')).length, 0)
+  assert.equal(new Set(DEFAULT_BANNED_PHRASES.map(straighten)).size, DEFAULT_BANNED_PHRASES.length)
+  // and a curly-spelled phrase still fires, because lint straightens the text
+  assert.ok(lint('In today\u2019s digital age we ship.', NEUTRAL).length > 0)
 })
 
 test('config: array form replaces the phrase list wholesale', () => {
