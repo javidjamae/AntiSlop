@@ -12,6 +12,28 @@ _Nothing yet._
 
 ### Fixed
 
+- Line endings no longer change findings. `lint()` split on `\n` without
+  folding CRLF, and a stray `\r` is a member of the bounded character classes
+  in `reversed-antithesis` and `contrast-slop`, where it both satisfies the
+  minimum length and consumes a slot against the maximum. The same prose linted
+  differently depending on which editor saved it: this repo's own `RULES.md`
+  lints clean as committed and gained a `reversed-antithesis` finding when saved
+  with Windows line endings. A lone `\r` folds too.
+- The CLI normalizes before splitting frontmatter, not only inside `lint()`.
+  `readFileSync` does not strip a BOM, so a leading one made `^---` fail: the
+  frontmatter was never split off, `title` and `description` stopped being
+  linted as their own surfaces, and both `---` delimiters fell through to the
+  body as `horizontal-rule` findings. A BOM'd file silently lost a real finding
+  and gained two false ones.
+- A doubled leading BOM reports. Stripping the one legitimate file marker means
+  anything still at position 0 is an artifact — a concatenated export, or a
+  re-encode of a file that already had one — and the exemption that used to
+  cover it is gone.
+- A misspelled key in a `customRules` entry throws instead of resolving
+  cleanly. `flgs` silently defaulted flags to `i`, turning a case-sensitive rule
+  case-insensitive; `sugestion` was silently dropped; and `patern` threw a raw
+  TypeError that the CLI printed as its config diagnostic. A missing `id` or
+  `pattern` is now named.
 - A leading byte-order mark no longer silences the heading rules. A BOM is an
   encoding marker that Windows editors and many export pipelines emit, and it
   sat in front of the first character of line 1, so `## Heading` stopped
@@ -23,8 +45,9 @@ _Nothing yet._
 
 ### Added
 
-- `stripBom(s)` is exported alongside `straighten(s)`, so a host normalizing
-  input before handing it over can apply what `lint()` applies.
+- `stripBom(s)` and `normalizeEol(s)` are exported alongside `straighten(s)`,
+  so a host normalizing input before handing it over can apply what `lint()`
+  applies.
 - A contract and fixture test layer, 29 cases over what the package ships.
   Property tests quantify over the shipped lists rather than restating them, so
   an edit to a list is checked by the tests that already exist: every phrase

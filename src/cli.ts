@@ -19,7 +19,7 @@
 // clean, 2 usage error. `--fail-on=never` reports without ever failing.
 import { readFileSync, existsSync } from 'node:fs'
 import { dirname, join, resolve, parse as parsePath } from 'node:path'
-import { lint, format, SEVERITY_RANK, type Violation, type Severity } from './index.js'
+import { lint, format, stripBom, normalizeEol, SEVERITY_RANK, type Violation, type Severity } from './index.js'
 import { resolveConfig, toLintExtras, type AntislopConfig, type ResolvedConfig } from './config.js'
 import { VERSION } from './version.js'
 
@@ -119,6 +119,14 @@ interface FileReport {
 }
 
 function lintDocument(name: string, raw: string, rc: ResolvedConfig): FileReport {
+  // Normalize BEFORE the frontmatter split, not only inside lint(). readFileSync
+  // does not strip a BOM, and a leading one makes `^---` fail: the frontmatter
+  // is then never split off, so `title` and `description` stop being linted as
+  // their own surfaces and both `---` delimiters fall through to the body as
+  // horizontal-rule findings. A BOM'd file silently lost a real finding and
+  // gained two false ones. CRLF folds here for the same reason: the split and
+  // the offset arithmetic below are line-based.
+  raw = normalizeEol(stripBom(raw))
   const frontmatterMatch = raw.match(/^---\n([\s\S]*?)\n---\n/)
   const front = frontmatterMatch ? frontmatterMatch[1] : ''
   const body = frontmatterMatch ? raw.slice(frontmatterMatch[0].length) : raw

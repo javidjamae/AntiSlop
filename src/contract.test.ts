@@ -97,6 +97,21 @@ test('every rule that can fire has a DEFAULT_SEVERITY entry', () => {
   }
 })
 
+test('the fixture list covers the rule set itself, not just the severity table', () => {
+  // Without this the two checks below are a hand-written list validating
+  // another hand-written list. Adding a rule to the RuleSet while forgetting
+  // both DEFAULT_SEVERITY and RULE_TRIGGERS would pass every other test here
+  // and produce exactly the symptom this file exists to catch: a config naming
+  // the new rule rejected as unknown for a rule that plainly exists.
+  const ALWAYS_ON = ['unicode-bold', 'engagement-bait', 'invisible-unicode', 'banned-phrase']
+  const expected = [...Object.keys(RULE_ID_TO_KEY), ...ALWAYS_ON, 'custom'].sort()
+  assert.deepEqual(
+    Object.keys(RULE_TRIGGERS).sort(),
+    expected,
+    'RULE_TRIGGERS has drifted from the shipped rule set'
+  )
+})
+
 test('every DEFAULT_SEVERITY entry is a rule that can actually fire', () => {
   // The other direction. An entry for a rule that no longer exists is a name
   // the config layer accepts and nothing honors.
@@ -132,7 +147,7 @@ test('a rule that is off cannot produce a finding, whatever its severity', () =>
   // severity entry naming it.
   for (const [id, key] of Object.entries(RULE_ID_TO_KEY)) {
     const trigger = RULE_TRIGGERS[id]
-    if (!trigger) continue
+    assert.ok(trigger, `no fixture for "${id}", so its off-switch is untested`)
     const rc = resolveConfig({
       profile: 'strict',
       rules: { [key]: false },

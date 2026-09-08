@@ -191,6 +191,26 @@ export const straighten = (s: string): string => s.replace(/\u2019/g, "'")
  */
 export const stripBom = (s: string): string => (s.charCodeAt(0) === 0xfeff ? s.slice(1) : s)
 
+/**
+ * Fold CRLF (and a lone CR) to LF.
+ *
+ * Not cosmetic, and not only about splitting lines. Several patterns are
+ * bounded character classes — `reversed-antithesis` matches `[^,;:.!?]{2,70}`,
+ * `contrast-slop` several more — and a stray `\r` is a member of every one of
+ * them. It both satisfies the minimum length and consumes a slot against the
+ * maximum, so the SAME prose produces different findings depending on which
+ * editor saved it:
+ *
+ *     lint('(a JSON number, not a\nstring)')     -> no finding
+ *     lint('(a JSON number, not a\r\nstring)')   -> reversed-antithesis
+ *
+ * That is real on this repo's own RULES.md, which lints clean as committed and
+ * gains a finding if saved with Windows line endings. The two structural rules
+ * already folded CRLF; `lint()` did not, so the rules it owns were the ones
+ * exposed.
+ */
+export const normalizeEol = (s: string): string => s.replace(/\r\n?/g, '\n')
+
 export const DEFAULT_BANNED_PHRASES = [
   'the reality is', 'the truth is',
   "i'll be honest", 'frankly', 'frankly speaking',
@@ -445,7 +465,7 @@ export function lint(
   // `isn’t a rewrite. It’s a rename` was clean, and the same held for the
   // reveal-shape and banned-opener families. The rule that most needed to fire
   // on model output was the one blind to how model output is punctuated.
-  const text = stripBom(straighten(raw))
+  const text = normalizeEol(stripBom(straighten(raw)))
   banned = banned.map(straighten)
   const openers = (extras.openers ?? BANNED_OPENERS).map(straighten)
   // Longest first so a nested entry cannot claim the span ahead of the phrase
@@ -495,7 +515,11 @@ export function lint(
     for (const inv of INVISIBLE_RE_MATCHES(line)) {
       const cp = inv.cp
       const abs = lineStarts[li] + inv.index
-      if (cp === 0xfeff && abs === 0) continue // legitimate file BOM
+      // No carve-out for a BOM at position 0: stripBom already removed the one
+      // legitimate file marker before matching, so anything still sitting here
+      // is a SECOND BOM, which is an artifact (a concatenated export, or a
+      // re-encode of a file that already had one) and reports like any other.
+      void abs
       const prev = cpBefore(line, inv.index)
       const next = cpAfter(line, inv.index + inv.length)
       if (cp === 0x200d && (isEmojiish(prev) || isEmojiish(next) || isJoinerScript(prev) || isJoinerScript(next))) continue
@@ -683,7 +707,7 @@ export function headingDependentOpeners(md: string): Violation[] {
   // their patterns are contraction-bearing and ASCII-only, so a direct caller
   // passing smart-quoted prose would silently get nothing. Straightening is
   // index-preserving, so the line numbers below stay correct.
-  const lines = stripBom(straighten(md)).replace(/\r\n/g, '\n').split('\n')
+  const lines = normalizeEol(stripBom(straighten(md))).split('\n')
   for (let i = 0; i < lines.length; i++) {
     const h = lines[i].match(/^#{2,6}\s+(.+)/)
     if (!h) continue
@@ -718,7 +742,7 @@ export function demonstrativeHeadings(md: string): Violation[] {
   // their patterns are contraction-bearing and ASCII-only, so a direct caller
   // passing smart-quoted prose would silently get nothing. Straightening is
   // index-preserving, so the line numbers below stay correct.
-  const lines = stripBom(straighten(md)).replace(/\r\n/g, '\n').split('\n')
+  const lines = normalizeEol(stripBom(straighten(md))).split('\n')
   let inFence = false
   lines.forEach((line, i) => {
     if (/^\s*```/.test(line)) inFence = !inFence

@@ -37,6 +37,19 @@ export const RULE_TRIGGERS: Record<string, string> = {
   custom: 'a zzprobezz here',
 }
 
+/**
+ * Triggers whose match runs to END OF LINE, where a stray `\r` sits.
+ *
+ * The encoding matrix passed over CRLF for a while without testing it: every
+ * entry above ends in punctuation, so no match reached the line ending and the
+ * `\r` never entered a bounded character class. These do, and they are the
+ * shapes that actually broke.
+ */
+export const EOL_SENSITIVE: Record<string, string> = {
+  'reversed-antithesis': '(a JSON number, not a\nstring)',
+  'contrast-slop': "It's not a tool problem, it's a\nstandards problem",
+}
+
 /** The id the `custom` trigger above is registered under. */
 export const CUSTOM_PROBE = { id: 'zzprobe', pattern: 'zzprobezz' }
 

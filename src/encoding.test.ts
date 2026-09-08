@@ -14,7 +14,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { lint, severityFamily, headingDependentOpeners, demonstrativeHeadings } from './index.js'
 import { resolveConfig, toLintExtras } from './config.js'
-import { RULE_TRIGGERS, CUSTOM_PROBE, ENCODINGS } from './fixtures.js'
+import { RULE_TRIGGERS, CUSTOM_PROBE, ENCODINGS, EOL_SENSITIVE } from './fixtures.js'
 
 const rc = resolveConfig({ profile: 'strict', customRules: [CUSTOM_PROBE] })
 const familiesOf = (text: string) =>
@@ -32,6 +32,32 @@ test('every rule fires identically under every encoding of the same text', () =>
       )
     }
   }
+})
+
+test('a match running to end of line is unchanged by CRLF', () => {
+  // The case the matrix above missed for a while, and the reason it missed it:
+  // every trigger there ends in punctuation, so no match reached the line
+  // ending. Several patterns are bounded character classes and a stray \r is a
+  // member of all of them, so it both satisfies the minimum length and eats a
+  // slot against the maximum. The same prose then lints differently depending
+  // on which editor saved it.
+  for (const [rule, text] of Object.entries(EOL_SENSITIVE)) {
+    const lf = familiesOf(text)
+    const crlf = familiesOf(text.replace(/\n/g, '\r\n'))
+    assert.deepEqual(crlf, lf, `"${rule}" differs under CRLF`)
+    const cr = familiesOf(text.replace(/\n/g, '\r'))
+    assert.deepEqual(cr, lf, `"${rule}" differs under lone CR`)
+  }
+})
+
+test('a second leading BOM is reported as the artifact it is', () => {
+  // stripBom removes the one legitimate file marker, so anything still at
+  // position 0 is a doubled BOM: a concatenated export, or a re-encode of a
+  // file that already had one.
+  const iu = (t: string) =>
+    lint(t, rc.rules, rc.banned, toLintExtras(rc)).filter((v) => v.rule === 'invisible-unicode')
+  assert.equal(iu('\uFEFFplain text here').length, 0, 'a single file BOM must stay exempt')
+  assert.equal(iu('\uFEFF\uFEFFplain text here').length, 1, 'a doubled BOM must report')
 })
 
 test('line numbers survive every encoding', () => {
