@@ -6,6 +6,10 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.5.0 (2026-09-08)
+
 ### Added
 
 - Rule severity: `error`, `warn`, `info`. Findings carry a `severity`, and the
