@@ -6,6 +6,10 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.5.0 (2026-09-08)
+
 ### Added
 
 - Rule severity: `error`, `warn`, `info`. Findings carry a `severity`, and the
@@ -16,12 +20,6 @@ all from one commit. The tag is the version consumers pin.
 - `--json` output gains `failing`, `failOn`, and a `counts` breakdown by level,
   so a host scoring findings reads the weight off the finding instead of
   maintaining its own table. ([#22](https://github.com/javidjamae/AntiSlop/issues/22))
-- An unrecognized `--flag` is now a usage error (exit 2) naming the valid
-  options, and an unknown top-level key in `antislop.config.json` throws
-  naming the valid keys. Both used to be ignored in silence. The typos this
-  feature invites are `--failon=never` and `severity` for `severities`, and
-  either one would otherwise leave the run gating while the author believed
-  gating was off.
 - Two config keys are exempt from that check, because JSON has no slot for
   either and config formats grow conventions to fill the gap: `$schema`, which
   is how an editor offers completion, and any key beginning with `//`, which is
@@ -29,6 +27,10 @@ all from one commit. The tag is the version consumers pin.
   `rules` and `severities`, where the decisions worth annotating live. Both are
   declared on `AntislopConfig`, so a consumer generating a config in TypeScript
   can write them too.
+- `straighten(s)` is exported: the apostrophe fold `lint()` applies before
+  matching. It is exported so configuring and matching cannot drift apart
+  again, which is what the removal bug below came from, and it is available to
+  a host that normalizes text before handing it over.
 - `Object.keys(DEFAULT_SEVERITY)` is the rule-ID list, which lets a consumer
   drift-test the always-on rules that no `RuleSet` toggle can reach.
   `DEFAULT_SEVERITY` has a null prototype, so an inherited member name misses
@@ -68,14 +70,28 @@ all from one commit. The tag is the version consumers pin.
 
 ### Changed
 
+- **An unrecognized `--flag` is now a usage error (exit 2).** It used to be
+  ignored, so `--failon=never` printed the findings and still failed the run
+  while the author believed gating was off. A pipeline carrying a stale or
+  misspelled flag starts failing on upgrade, which is the point: it was never
+  doing what it said.
+- **An unknown top-level key in `antislop.config.json` now throws (exit 2),**
+  and so does a misspelled key inside `bannedPhrases`, `openers` or
+  `arrowExemptions`. `severity` for `severities` used to resolve to nothing and
+  leave the run gating. `$schema` and `//` keys are exempt.
 - Human-readable output prints the level per finding, as `[error]` before the
   rule name. The summary line gains a breakdown only when a run is not
   all-`error`, so an ordinary run reads as it did before. `--json` is the stable surface for
   anything parsing output.
 
-**Exit codes are unchanged for every existing config.** Every rule that ships
-declares `error` and the default threshold is `error`, so the same runs pass and
-the same runs fail. Severity itself is opt-in.
+**Severity changes no exit code on its own.** Every rule that ships declares
+`error` and the default threshold is `error`, so the same runs pass and the same
+runs fail. Severity is opt-in. Verified across 338 runs against v0.4.0, over the
+whole pinned corpus in both profiles: no finding and no exit code moves.
+
+That guarantee covers severity. It does not cover the stricter input checks
+below, which are the part of this release that can fail a setup that used to
+pass. Read those before upgrading a pipeline.
 
 Note one consequence once a rule IS moved below the threshold: exit 0 stops
 meaning "no findings" and starts meaning "nothing at or above the threshold".
