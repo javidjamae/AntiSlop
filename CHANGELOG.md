@@ -56,8 +56,8 @@ all from one commit. The tag is the version consumers pin.
 - A `customRules` pattern is straightened too, so a rule typed with a smart
   apostrophe fires instead of silently never matching.
 - A misspelled key inside `bannedPhrases`, `openers` or `arrowExemptions` now
-  throws, the way a misspelled top-level key already did. `{"bannedPhrases":
-  {"remvoe": [...]}}` used to resolve clean and leave the phrase firing.
+  throws, the way a misspelled top-level key already did. Writing `remvoe` for
+  `remove` used to resolve clean and leave the phrase firing.
 - A blank phrase entry is dropped rather than compiled. `""` became `\b\b`,
   which matches every non-empty line, so one stray comma in a hand-edited array
   buried every real finding under a finding on all of them.
