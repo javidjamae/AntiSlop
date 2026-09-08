@@ -22,6 +22,13 @@ all from one commit. The tag is the version consumers pin.
   feature invites are `--failon=never` and `severity` for `severities`, and
   either one would otherwise leave the run gating while the author believed
   gating was off.
+- Two config keys are exempt from that check, because JSON has no slot for
+  either and config formats grow conventions to fill the gap: `$schema`, which
+  is how an editor offers completion, and any key beginning with `//`, which is
+  a note to the next reader. A `//` key works at the top level and inside
+  `rules` and `severities`, where the decisions worth annotating live. Both are
+  declared on `AntislopConfig`, so a consumer generating a config in TypeScript
+  can write them too.
 - `Object.keys(DEFAULT_SEVERITY)` is the rule-ID list, which lets a consumer
   drift-test the always-on rules that no `RuleSet` toggle can reach.
   `DEFAULT_SEVERITY` has a null prototype, so an inherited member name misses

@@ -53,6 +53,15 @@ export interface AntislopConfig {
    *  --fail-on=error. Unlike `rules`, always-on rules accept a severity: they
    *  cannot be silenced, but a site may choose to treat one as advisory. */
   severities?: Record<string, Severity>
+  /** Editor completion hint. Ignored by the linter, and declared here so a
+   *  consumer that GENERATES a config in TypeScript can write the key the
+   *  runtime accepts. A type that rejects what the runtime allows is the same
+   *  bug as the reverse, just discovered at a different hour. */
+  $schema?: string
+  /** A note to the next reader. JSON has no comments, so any key beginning
+   *  with `//` is ignored: `"//"` for one, or `"// severities"` to sit next to
+   *  what it explains. */
+  [comment: `//${string}`]: unknown
 }
 
 export interface CompiledCustomRule {
@@ -108,6 +117,10 @@ function normalizeRuleOverrides(raw: Partial<RuleSet> | Record<string, boolean>)
   const out: Partial<RuleSet> = {}
   const valid = new Set(Object.keys(NEUTRAL))
   for (const [key, value] of Object.entries(raw)) {
+    // A comment belongs where the decision it explains lives, so the `//`
+    // exemption reaches inside `rules` and `severities` too, not just the top
+    // level. Anything else unrecognized is still an error.
+    if (isNestedCommentKey(key)) continue
     if (valid.has(key)) {
       out[key as keyof RuleSet] = value as boolean
       continue
@@ -156,6 +169,8 @@ function normalizeSeverities(
   const out: Record<string, Severity> = {}
   const customIds = new Set(customRules.map((r) => r.id))
   for (const [key, value] of Object.entries(raw)) {
+    // Before the value check: a comment's value is prose, not a severity.
+    if (isNestedCommentKey(key)) continue
     if (!VALID_SEVERITIES.has(value)) {
       throw new Error(
         `antislop config: severity for "${key}" must be one of error, warn, info (got ${JSON.stringify(value)}).`
@@ -233,11 +248,29 @@ const KNOWN_CONFIG_KEYS = [
   'severities',
 ] as const
 
+/** JSON has no comments and no schema slot, so config formats grow two
+ *  conventions to fill the gap: `$schema` for editor completion, and a `//`
+ *  key for a note to the next reader. Both are ubiquitous, neither is a typo,
+ *  and rejecting them turns a helpful config into a failed run. They are
+ *  ignored rather than validated. Anything else unrecognized is still an
+ *  error, which is the point of the check. */
+function isConfigMetadataKey(key: string): boolean {
+  return key === '$schema' || key.startsWith('//')
+}
+
+/** Inside a nested block a `//` note is still a note, but `$schema` has no
+ *  meaning there, so only the comment convention carries down. */
+function isNestedCommentKey(key: string): boolean {
+  return key.startsWith('//')
+}
+
 export function resolveConfig(cfg: AntislopConfig = {}): ResolvedConfig {
   for (const key of Object.keys(cfg)) {
+    if (isConfigMetadataKey(key)) continue
     if (!(KNOWN_CONFIG_KEYS as readonly string[]).includes(key)) {
       throw new Error(
-        `antislop config: unknown key "${key}". Valid keys: ${[...KNOWN_CONFIG_KEYS].sort().join(', ')}.`
+        `antislop config: unknown key "${key}". Valid keys: ${[...KNOWN_CONFIG_KEYS].sort().join(', ')}.` +
+          ` ("$schema" and keys beginning with "//" are ignored, for editor hints and comments.)`
       )
     }
   }
