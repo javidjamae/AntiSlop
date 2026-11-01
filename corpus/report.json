@@ -1,6 +1,6 @@
 {
   "cutoff": "2021-12-31T00:00:00Z",
-  "totalLines": 110596,
+  "totalLines": 110613,
   "units": [
     {
       "dir": "rust-book",
@@ -129,7 +129,7 @@
       "role": "control",
       "label": "gutenberg",
       "files": 5,
-      "lines": 58771,
+      "lines": 58788,
       "counts": {
         "NEUTRAL": {
           "banned phrase": 30,
