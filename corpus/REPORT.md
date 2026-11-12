@@ -233,9 +233,9 @@ An entry firing often here is a candidate for demotion to the opt-in pack.
 
 **`heading-dependent-opener`**
 
-- rust-book: It might seem like the paths we've written to call functions so far are
+- rust-book: It might seem like the paths we’ve written to call functions so far are
 - rust-book: It would also be appropriate to call `unwrap` when you have some other logic
-- rust-book: This isn't the last you'll see of concurrency in this book: the project in
+- rust-book: This isn’t the last you’ll see of concurrency in this book: the project in
 
 **`inline-header-bullet`**
 

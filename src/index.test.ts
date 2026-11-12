@@ -919,3 +919,31 @@ test('excerpt: invisible-unicode quotes the sentence that hides the character', 
   const v = lint(line, NEUTRAL).find((x) => x.rule === 'invisible-unicode')
   assert.equal(v?.excerpt, 'This one hides a zero​width space.')
 })
+
+test('excerpt: review round 2 boundaries', () => {
+  // Two spaces before a lowercase word are still one sentence.
+  assert.deepEqual(excerptsOf('We tried.  and then it failed — badly. Next part.', 'em-dash'), ['We tried.  and then it failed — badly.'])
+  // A single capital before a period ends a sentence ("plan B.").
+  assert.deepEqual(excerptsOf('We chose plan B. Then the roof leaked — again. More here.', 'em-dash'), ['Then the roof leaked — again.'])
+  // An abbreviation inside emphasis or smart quotes is still an abbreviation.
+  assert.deepEqual(excerptsOf('Intro here. Ask **Dr. Smith** about it — today.', 'em-dash'), ['Ask **Dr. Smith** about it — today.'])
+  assert.deepEqual(excerptsOf('Intro here. Ask ‘Dr. Smith’ about it — today.', 'em-dash'), ['Ask ‘Dr. Smith’ about it — today.'])
+})
+
+test('excerpt: the structural rules quote the source, smart quotes included', () => {
+  const md = '## Pricing\n\nThis is why we don’t charge per seat. More.\n\n## What’s this about it\n\nBody.'
+  const v = lint(md, STRICT)
+  assert.equal(v.find((x) => x.rule === 'heading-dependent-opener')?.excerpt, 'This is why we don’t charge per seat.')
+})
+
+test('excerpt: a cut never leaves half a surrogate pair', () => {
+  const line = `${'z'.repeat(199)}\u{1F600}${'z'.repeat(60)}`
+  const v = lint(line, NEUTRAL, [], { customRules: [{ id: 'zz', re: /z{100,}\u{1F600}z+/u }] }).find((x) => x.rule === 'custom: zz')!
+  assert.equal(v.excerpt, 'z'.repeat(199))
+  assert.ok(!/[\uD800-\uDBFF]$/.test(v.excerpt))
+})
+
+test('contrast-slop: -ing verbs that end in "thing" are verbs', () => {
+  assert.ok(!rulesOf('The patients are not breathing heavily. They are sleeping soundly.').includes('contrast-slop'))
+  assert.ok(rulesOf('This is not something you can skip. It is required.').includes('contrast-slop'))
+})

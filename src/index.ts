@@ -477,7 +477,15 @@ export function lint(
   // The excerpt is cut from the text as written, not as straightened, so a
   // host can find it in its own source. Straightening is one code unit for
   // one, so the two line arrays share every offset.
-  const sourceLines = normalizeEol(stripBom(raw)).split('\n')
+  const source = normalizeEol(stripBom(raw))
+  const sourceLines = source.split('\n')
+  // Sentence ends per line, found once, on the first finding that needs them.
+  const endsCache = new Map<number, number[]>()
+  const excerpt = (li: number, col: number, end: number) => {
+    let ends = endsCache.get(li)
+    if (!ends) endsCache.set(li, (ends = sentenceEnds(sourceLines[li])))
+    return excerptAt(sourceLines[li], col, end, ends)
+  }
 
   const lineStarts: number[] = []
   let acc = 0
@@ -492,12 +500,12 @@ export function lint(
   // paragraph, and its first 80 characters are often not what was flagged.
   const push = (li: number, col: number, rule: string, suggestion: string, end = col + 1) => {
     if (mask[lineStarts[li] + col]) return
-    violations.push({ line: li + 1, rule, excerpt: excerptAt(sourceLines[li], col, end), suggestion, severity: sev(rule) })
+    violations.push({ line: li + 1, rule, excerpt: excerpt(li, col, end), suggestion, severity: sev(rule) })
   }
   // For rules where the skip mask must NOT apply: a hidden character inside a
   // code block or quote is more suspicious, not less.
   const pushAlways = (li: number, col: number, end: number, rule: string, suggestion: string) => {
-    violations.push({ line: li + 1, rule, excerpt: excerptAt(sourceLines[li], col, end), suggestion, severity: sev(rule) })
+    violations.push({ line: li + 1, rule, excerpt: excerpt(li, col, end), suggestion, severity: sev(rule) })
   }
 
   lines.forEach((line, li) => {
@@ -625,11 +633,8 @@ export function lint(
       //    traffic." Known cost: "Buyers aren't buying software. They're
       //    buying outcomes." is the flourish too, and is left out with the
       //    rest.
-      const NEG = `(?:\\b(?:is|are|was|were)\\s+not\\b|\\b(?:is|are|was|were|ca|wo)n'?t\\b|\\bcannot\\b|(?:'s|'re)\\s+not\\b)`
-      const REASSERT = `(?:it|that|this|they|these|those)(?:\\s+(?:is|are|was|were|does|do|did|will|can)|'s|'re)\\b`
-      const reassert = new RegExp(`(${NEG})[^.!?]{0,60}[.!?]\\s+(${REASSERT})`, 'gi')
-      const progressive = new RegExp(`^\\s+(?:[a-z]+ly\\s+)?(?!${NOT_PROGRESSIVE}\\b)[a-z]+ing\\s+[a-z]`, 'i')
-      const progressiveReply = new RegExp(`^\\s+(?:[a-z]+ly\\s+)?(?!${NOT_PROGRESSIVE}\\b)[a-z]+ing\\b`, 'i')
+      const reassert = CONTRAST_REASSERT
+      reassert.lastIndex = 0
       const consequence = /\b(?:is|are)\s+not\s+[^,.;]{1,30},\s+(?:and\s+)?(?:until|unless)\b/i
       // The comma forms, mirrored from a production linter tuned on real copy: the
       // 60-char cap and the no-sentence-punctuation middle keep a match inside
@@ -645,9 +650,9 @@ export function lint(
       }
       while ((m = reassert.exec(line))) {
         const actionToAction =
-          progressive.test(line.slice(m.index + m[1].length)) &&
+          CONTRAST_PROGRESSIVE.test(line.slice(m.index + m[1].length)) &&
           /^(?:they|these|those)\b/i.test(m[2]) &&
-          progressiveReply.test(line.slice(m.index + m[0].length))
+          CONTRAST_PROGRESSIVE_REPLY.test(line.slice(m.index + m[0].length))
         if (!actionToAction) {
           hit(m.index, m.index + m[0].length)
           break
@@ -724,21 +729,32 @@ export function lint(
 
   // Structural rules (markdown-aware, multi-line).
   if (rules.headingDependentOpener) {
-    for (const v of headingDependentOpeners(text)) violations.push({ ...v, severity: sev(v.rule) })
+    for (const v of headingDependentOpeners(source)) violations.push({ ...v, severity: sev(v.rule) })
   }
   if (rules.demonstrativeHeading) {
-    for (const v of demonstrativeHeadings(text)) violations.push({ ...v, severity: sev(v.rule) })
+    for (const v of demonstrativeHeadings(source)) violations.push({ ...v, severity: sev(v.rule) })
   }
 
   return violations.sort((a, b) => a.line - b.line)
 }
 
-// -ing words that are nouns, never a progressive verb (see contrastSlop).
-const NOT_PROGRESSIVE = `(?:[a-z]*thing|during|morning|evening|ceiling|string|spring|king|ring|wing)`
+// -ing words that are nouns, never a progressive verb (see contrastSlop). An
+// explicit list: a `[a-z]*thing` family would also swallow breathing, bathing
+// and soothing, which are verbs.
+const NOT_PROGRESSIVE = `(?:thing|nothing|something|anything|everything|clothing|plaything|during|morning|evening|ceiling|string|spring|king|ring|wing)`
+// contrastSlop's patterns. Built once: the reassertion regex is global and
+// stateful, so each line resets its lastIndex.
+const CONTRAST_NEG = `(?:\\b(?:is|are|was|were)\\s+not\\b|\\b(?:is|are|was|were|ca|wo)n'?t\\b|\\bcannot\\b|(?:'s|'re)\\s+not\\b)`
+const CONTRAST_REASSERT_TAIL = `(?:it|that|this|they|these|those)(?:\\s+(?:is|are|was|were|does|do|did|will|can)|'s|'re)\\b`
+const CONTRAST_REASSERT = new RegExp(`(${CONTRAST_NEG})[^.!?]{0,60}[.!?]\\s+(${CONTRAST_REASSERT_TAIL})`, 'gi')
+const CONTRAST_PROGRESSIVE = new RegExp(`^\\s+(?:[a-z]+ly\\s+)?(?!${NOT_PROGRESSIVE}\\b)[a-z]+ing\\s+[a-z]`, 'i')
+const CONTRAST_PROGRESSIVE_REPLY = new RegExp(`^\\s+(?:[a-z]+ly\\s+)?(?!${NOT_PROGRESSIVE}\\b)[a-z]+ing\\b`, 'i')
 
 /** Longest excerpt a finding quotes. */
 const EXCERPT_MAX = 200
-// A period after one of these is not a sentence end ("Dr. Smith").
+// A period after one of these is not a sentence end ("Dr. Smith"). Single
+// initials are not on it: "plan B." and "Vitamin C." end sentences far more
+// often in prose than "J. Smith" sits mid-sentence.
 const ABBREVIATIONS = new Set(['dr', 'mr', 'mrs', 'ms', 'st', 'jr', 'sr', 'vs', 'cf', 'fig', 'e.g', 'i.e'])
 // A run of . ! ? and any closing quotes or brackets, then spaces or tabs and
 // something that is not a lowercase letter, or the end of the line. Only
@@ -746,7 +762,7 @@ const ABBREVIATIONS = new Set(['dr', 'mr', 'mrs', 'ms', 'st', 'jr', 'sr', 'vs', 
 // itself a finding (invisible-unicode), and must stay inside the excerpt that
 // reports it. Requiring a non-lowercase start is what keeps "e.g. the roof"
 // and "we waited... and waited" one sentence.
-const SENTENCE_END = /[.!?]+["'\u2019\u201d)\]]*(?=[ \t]+(?![a-z])|[ \t]*$)/g
+const SENTENCE_END = /[.!?]+["'\u2019\u201d)\]*_]*(?=[ \t]+(?![ \ta-z])|[ \t]*$)/g
 
 /** Where each sentence of `line` ends (exclusive offsets). */
 function sentenceEnds(line: string): number[] {
@@ -754,14 +770,19 @@ function sentenceEnds(line: string): number[] {
   SENTENCE_END.lastIndex = 0
   let m: RegExpExecArray | null
   while ((m = SENTENCE_END.exec(line))) {
-    const word = /([^\s(["']+)$/.exec(line.slice(0, m.index))?.[1]?.toLowerCase() ?? ''
-    const abbreviation = m[0][0] === '.' && m[0].length === 1 && (ABBREVIATIONS.has(word) || /^[a-z]$/.test(word))
+    // The word before the period, without the quotes, brackets and emphasis
+    // marks that wrap it ("**Dr. Smith**", "\u2018Dr. Smith\u2019"). Read from
+    // a short window so a long line is not re-sliced from its start each time.
+    const before = line.slice(Math.max(0, m.index - 12), m.index)
+    const word = (/([^\s]+)$/.exec(before)?.[1] ?? '').replace(/^[(["'*_\u2018\u201c]+/, '').toLowerCase()
+    const abbreviation = m[0][0] === '.' && m[0].length === 1 && ABBREVIATIONS.has(word)
     if (!abbreviation) ends.push(m.index + m[0].length)
   }
   return ends
 }
 
 const isGap = (c: string | undefined) => c === ' ' || c === '\t'
+const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff
 
 /**
  * The text a finding quotes: from the start of the sentence that holds the
@@ -774,10 +795,9 @@ const isGap = (c: string | undefined) => c === ' ' || c === '\t'
  * kept whole unless it is longer than the cap, in which case its first
  * EXCERPT_MAX characters are the excerpt.
  */
-function excerptAt(line: string, start: number, end: number): string {
+function excerptAt(line: string, start: number, end: number, ends: number[] = sentenceEnds(line)): string {
   start = Math.max(0, Math.min(start, line.length))
   end = Math.max(start, Math.min(end, line.length))
-  const ends = sentenceEnds(line)
   let from = 0
   for (const e of ends) if (e <= start) from = e
   let to = line.length
@@ -790,7 +810,11 @@ function excerptAt(line: string, start: number, end: number): string {
   while (from < start && isGap(line[from])) from++
   while (to > end && isGap(line[to - 1])) to--
   if (to - from <= EXCERPT_MAX) return line.slice(from, to)
-  if (end - start > EXCERPT_MAX) return line.slice(start, start + EXCERPT_MAX)
+  if (end - start > EXCERPT_MAX) {
+    // Never end on half of a surrogate pair.
+    const cut = isHighSurrogate(line.charCodeAt(start + EXCERPT_MAX - 1)) ? EXCERPT_MAX - 1 : EXCERPT_MAX
+    return line.slice(start, start + cut)
+  }
 
   // The budget left after the match is shared between the text before it
   // and the text after it: each side gets what it needs when the other needs
