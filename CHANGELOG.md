@@ -8,6 +8,29 @@ all from one commit. The tag is the version consumers pin.
 
 _Nothing yet._
 
+## 0.6.1 (2026-11-12)
+
+### Fixed
+
+- A finding's `excerpt` quotes the sentence that holds the match. It was the
+  first 80 characters of the line, and a line is a whole paragraph, so a
+  finding three sentences in quoted an opening sentence with nothing wrong in
+  it. A host that hands the excerpt to an editor, or asks a model to rewrite
+  the quoted text, was pointing it at the wrong words. The excerpt now runs
+  from the start of the matched sentence through the end of the sentence the
+  match ends in, is capped at 200 characters with the match always kept, and
+  is always a verbatim substring of the line. Every per-line rule gets it,
+  `invisible-unicode` included.
+- `contrast-slop` no longer fires on a negated progressive verb, which
+  negates an action and then says what happens instead. The rule already
+  excluded `do not need` for the same reason. Now clean:
+  `The inspector is not glancing at shingles. They are checking drains.`
+  Still reported, the identity form and an `-ing` noun that ends its clause:
+  `This is not a sales visit. It is an inspection.`
+  `The problem is not pricing. It is positioning.`
+  The corpus harness shows no change in either direction: no corpus line had
+  the excluded shape.
+
 ## 0.6.0 (2026-09-08)
 
 ### Fixed

@@ -120,6 +120,14 @@ Notes the corpus produced:
   and read the discourse marker `; that is,` as a reassertion. The right side
   stays a copula or auxiliary: matching a bare lexical verb (`The cache
   doesn't expire. It leaks.`) swallows ordinary two-sentence prose.
+  A negated progressive verb is the same negated ACTION as `do not need`,
+  and is left out:
+  `The inspector is not glancing at shingles. They are checking drains.`
+  The test is an `-ing` word followed by another word. An `-ing` word that
+  ends its clause reads as a noun and still reports, as do `something` and
+  the other `-ing` nouns:
+  `The problem is not pricing. It is positioning.` On the corpus this exclusion moved no finding in either
+  direction; it exists for blog prose, where the shape is common.
   Net against the previous rule set: three shapes gained, and the target-register
   rate is 0.35 per 1,000 (see the table above).
 

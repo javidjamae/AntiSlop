@@ -766,3 +766,88 @@ test('CLI: --json carries the severity counts and the gate that was applied', ()
   assert.equal(out.failing, out.total)
   assert.equal(out.reports[0].violations[0].severity, 'error')
 })
+
+// ---------- excerpt: quote the flagged sentence, not the paragraph start ----------
+
+const FLAT_ROOF =
+  'On a flat or low-slope roof, the inspector is not glancing for missing shingles the way they would on a house. They are checking a handful of specific zones where these roofs actually fail.'
+const FLAT_ROOF_REWORDED =
+  'On a flat or low-slope roof, the inspector does not glance for missing shingles the way they would on a house. They check a handful of specific zones where these roofs actually fail.'
+const FLOURISH = 'This is not a sales visit. It is an inspection.'
+const LEAD =
+  'A commercial roof inspection documents current conditions, identifies problems, and estimates how long the roof has left.'
+
+const excerptsOf = (text: string, rule: string) => lint(text, STRICT).filter((v) => v.rule === rule).map((v) => v.excerpt)
+
+test('contrast-slop: a negated progressive verb is an action, not a reclassification', () => {
+  assert.deepEqual(excerptsOf(FLAT_ROOF, 'contrast-slop'), [])
+  assert.deepEqual(excerptsOf(`${LEAD} ${FLAT_ROOF}`, 'contrast-slop'), [])
+  assert.deepEqual(excerptsOf(FLAT_ROOF_REWORDED, 'contrast-slop'), [])
+  assert.ok(!rulesOf('The worker is not retrying the request. It is waiting for the lock.').includes('contrast-slop'))
+  assert.ok(!rulesOf("They aren't checking the logs. They are reading the metrics.").includes('contrast-slop'))
+})
+
+test('contrast-slop: the identity form stays flagged, -ing nouns included', () => {
+  assert.ok(rulesOf(FLOURISH).includes('contrast-slop'))
+  assert.ok(rulesOf(`${FLAT_ROOF} ${FLOURISH}`).includes('contrast-slop'))
+  // An -ing word that ends its clause reads as a noun, not a verb.
+  assert.ok(rulesOf('The problem is not pricing. It is positioning.').includes('contrast-slop'))
+  // -ing nouns that take a complement are still nouns.
+  assert.ok(rulesOf('This is not something you can skip. It is required.').includes('contrast-slop'))
+  assert.ok(rulesOf("It's not nothing to worry about. It is a real risk.").includes('contrast-slop'))
+})
+
+test('excerpt: quotes the sentence holding the match, not the line start', () => {
+  const para = `${LEAD} ${FLAT_ROOF} ${FLOURISH}`
+  assert.deepEqual(excerptsOf(para, 'contrast-slop'), [FLOURISH])
+
+  const dash = 'The first sentence is fine. So is the second. The third one has a dash — right here. And a fourth.'
+  assert.deepEqual(excerptsOf(dash, 'em-dash'), ['The third one has a dash — right here.'])
+
+  const phrase = 'Roofs fail at the seams. Our crews leverage thermal imaging to find wet insulation. Then they write it up.'
+  assert.deepEqual(
+    lint(phrase, NEUTRAL, ['leverage']).filter((v) => v.rule.startsWith('banned phrase')).map((v) => v.excerpt),
+    ['Our crews leverage thermal imaging to find wet insulation.']
+  )
+})
+
+test('excerpt: a match at the start of the line still quotes its whole sentence', () => {
+  assert.deepEqual(excerptsOf("Here's why the drain was clogged. The rest was fine.", `banned opener: "here's why"`), [
+    "Here's why the drain was clogged.",
+  ])
+})
+
+test('excerpt: an ellipsis inside the match is not a sentence boundary', () => {
+  assert.deepEqual(excerptsOf('One sentence. Then we waited... and waited. Done.', 'ellipsis'), ['Then we waited...'])
+})
+
+test('excerpt: capped at 200 characters and always keeps the match', () => {
+  const longLead = 'word '.repeat(80) // 400 chars, no sentence end
+  const line = `${longLead}and then — the dash at the very end of a long sentence.`
+  const [ex] = excerptsOf(line, 'em-dash')
+  assert.ok(ex.length <= 200, `excerpt is ${ex.length} chars`)
+  assert.ok(ex.includes('—'), 'the matched character must survive the cap')
+
+  const longTail = `The dash — is up front. ${'x'.repeat(10)} `.replace('front.', `front ${'and on '.repeat(60)}end.`)
+  const [ex2] = excerptsOf(longTail, 'em-dash')
+  assert.ok(ex2.length <= 200)
+  assert.ok(ex2.startsWith('The dash —'), 'the lead-in is kept when it fits')
+})
+
+test('excerpt: always a verbatim substring of the linted line', () => {
+  const lines = [
+    `${LEAD} ${FLAT_ROOF} ${FLOURISH}`,
+    '- **Bold:** one. **two** and **three** and **four** here.',
+    'Ends "quoted." Then a dash — here! And (parens.) more — again?',
+    'No sentence end anywhere — just a run-on — with dashes',
+  ]
+  for (const line of lines) {
+    for (const v of lint(line, STRICT)) assert.ok(line.includes(v.excerpt), `${v.rule}: "${v.excerpt}" not in line`)
+  }
+})
+
+test('excerpt: invisible-unicode quotes the sentence that hides the character', () => {
+  const line = 'This sentence is clean. This one hides a zero​width space. Clean again.'
+  const v = lint(line, NEUTRAL).find((x) => x.rule === 'invisible-unicode')
+  assert.equal(v?.excerpt, 'This one hides a zero​width space.')
+})
