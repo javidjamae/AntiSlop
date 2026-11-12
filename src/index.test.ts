@@ -802,8 +802,13 @@ test('contrast-slop: an -ing identity claim reasserted with it/this/that stays f
   )
   // Ambiguous between an action and an identity, so it reports.
   assert.ok(rulesOf('The worker is not retrying the request. It is waiting for the lock.').includes('contrast-slop'))
+  // An -ing word in front of a noun is a noun modifier, on either side.
+  assert.ok(rulesOf("Buyers aren't buying software. They're buying outcomes.").includes('contrast-slop'))
+  assert.ok(rulesOf("These aren't marketing tactics. They're marketing systems.").includes('contrast-slop'))
+  assert.ok(rulesOf("They're not boring meetings. They're working sessions.").includes('contrast-slop'))
+  assert.ok(rulesOf('These are not cooling fans. They are heating elements.').includes('contrast-slop'))
   // Known cost of the exclusion, pinned so a change to it is deliberate.
-  assert.ok(!rulesOf("Buyers aren't buying software. They're buying outcomes.").includes('contrast-slop'))
+  assert.ok(!rulesOf("Buyers aren't buying a tool. They're buying an outcome.").includes('contrast-slop'))
 })
 
 test('contrast-slop: an excluded pair does not hide a flourish later in the line', () => {
@@ -946,4 +951,13 @@ test('excerpt: a cut never leaves half a surrogate pair', () => {
 test('contrast-slop: -ing verbs that end in "thing" are verbs', () => {
   assert.ok(!rulesOf('The patients are not breathing heavily. They are sleeping soundly.').includes('contrast-slop'))
   assert.ok(rulesOf('This is not something you can skip. It is required.').includes('contrast-slop'))
+})
+
+test('excerpt: review round 3 boundaries', () => {
+  assert.deepEqual(excerptsOf('We moved to the U.S. Army base — later.', 'em-dash'), ['We moved to the U.S. Army base — later.'])
+  assert.deepEqual(excerptsOf('1. First thing — here.', 'em-dash'), ['1. First thing — here.'])
+  // Tabs are word gaps when the cap bites, so the lead-in is not dropped.
+  const [ex] = excerptsOf(`${'x\t'.repeat(150)}— ${'y\t'.repeat(150)}`, 'em-dash')
+  assert.ok(ex.length > 190, `excerpt is ${ex.length} chars`)
+  assert.ok(ex.indexOf('—') > 50, 'lead-in kept')
 })

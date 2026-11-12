@@ -498,7 +498,7 @@ export function lint(
   // `col`..`end` is the matched span. The excerpt quotes the sentence that
   // holds it (see excerptAt), not the start of the line: a "line" is a whole
   // paragraph, and its first 80 characters are often not what was flagged.
-  const push = (li: number, col: number, rule: string, suggestion: string, end = col + 1) => {
+  const push = (li: number, col: number, rule: string, suggestion: string, end: number) => {
     if (mask[lineStarts[li] + col]) return
     violations.push({ line: li + 1, rule, excerpt: excerpt(li, col, end), suggestion, severity: sev(rule) })
   }
@@ -620,7 +620,8 @@ export function lint(
       // someone does, the same as `do not need` above, and is left out. All
       // three conditions hold, or it reports:
       //  - on the left, an -ing word, optionally after one -ly adverb,
-      //    followed by another word. "The problem is not pricing. It is positioning." ends the
+      //    followed by a verb's complement (VERB_COMPLEMENT). "These aren't
+      //    marketing tactics." has a noun after it and reports. "The problem is not pricing. It is positioning." ends the
       //    clause on it and reads as a noun; `something` and the other -ing
       //    nouns in NOT_PROGRESSIVE are nouns wherever they sit.
       //  - a reassertion that is itself a progressive verb ("They are
@@ -630,9 +631,9 @@ export function lint(
       //  - a reassertion by they/these/those. With it/this/that the -ing
       //    phrase is an identity claim, which is the flourish itself:
       //    "Success isn't getting more traffic. It's getting the right
-      //    traffic." Known cost: "Buyers aren't buying software. They're
-      //    buying outcomes." is the flourish too, and is left out with the
-      //    rest.
+      //    traffic." Known cost: an action-to-action flourish with a
+      //    determiner, such as "Buyers aren't buying a tool. They're buying
+      //    an outcome.", is left out with the rest.
       const reassert = CONTRAST_REASSERT
       reassert.lastIndex = 0
       const consequence = /\b(?:is|are)\s+not\s+[^,.;]{1,30},\s+(?:and\s+)?(?:until|unless)\b/i
@@ -747,15 +748,22 @@ const NOT_PROGRESSIVE = `(?:thing|nothing|something|anything|everything|clothing
 const CONTRAST_NEG = `(?:\\b(?:is|are|was|were)\\s+not\\b|\\b(?:is|are|was|were|ca|wo)n'?t\\b|\\bcannot\\b|(?:'s|'re)\\s+not\\b)`
 const CONTRAST_REASSERT_TAIL = `(?:it|that|this|they|these|those)(?:\\s+(?:is|are|was|were|does|do|did|will|can)|'s|'re)\\b`
 const CONTRAST_REASSERT = new RegExp(`(${CONTRAST_NEG})[^.!?]{0,60}[.!?]\\s+(${CONTRAST_REASSERT_TAIL})`, 'gi')
-const CONTRAST_PROGRESSIVE = new RegExp(`^\\s+(?:[a-z]+ly\\s+)?(?!${NOT_PROGRESSIVE}\\b)[a-z]+ing\\s+[a-z]`, 'i')
-const CONTRAST_PROGRESSIVE_REPLY = new RegExp(`^\\s+(?:[a-z]+ly\\s+)?(?!${NOT_PROGRESSIVE}\\b)[a-z]+ing\\b`, 'i')
+// An -ing verb, optionally after one -ly adverb. Shared by both sides.
+const ING_VERB = `^\\s+(?:[a-z]+ly\\s+)?(?!${NOT_PROGRESSIVE}\\b)[a-z]+ing`
+// What follows a verb and not a noun modifier: a determiner, a preposition,
+// a pronoun or an -ly adverb. "glancing for", "checking the logs" and
+// "breathing heavily" are actions; "marketing tactics" and "boring meetings"
+// are nouns, and their sentence is an identity claim.
+const VERB_COMPLEMENT = `(?:a|an|the|this|that|these|those|my|your|his|her|its|our|their|some|any|every|each|no|more|all|it|them|him|me|us|you|for|at|to|in|on|with|from|into|through|about|over|under|around|up|down|out|off|by|of|[a-z]+ly)\\b`
+const CONTRAST_PROGRESSIVE = new RegExp(`${ING_VERB}\\s+${VERB_COMPLEMENT}`, 'i')
+const CONTRAST_PROGRESSIVE_REPLY = new RegExp(`${ING_VERB}\\b`, 'i')
 
 /** Longest excerpt a finding quotes. */
 const EXCERPT_MAX = 200
 // A period after one of these is not a sentence end ("Dr. Smith"). Single
 // initials are not on it: "plan B." and "Vitamin C." end sentences far more
 // often in prose than "J. Smith" sits mid-sentence.
-const ABBREVIATIONS = new Set(['dr', 'mr', 'mrs', 'ms', 'st', 'jr', 'sr', 'vs', 'cf', 'fig', 'e.g', 'i.e'])
+const ABBREVIATIONS = new Set(['dr', 'mr', 'mrs', 'ms', 'st', 'jr', 'sr', 'vs', 'cf', 'fig', 'inc', 'ltd', 'approx', 'no'])
 // A run of . ! ? and any closing quotes or brackets, then spaces or tabs and
 // something that is not a lowercase letter, or the end of the line. Only
 // ASCII space and tab count as the gap: a no-break or zero-width space is
@@ -775,7 +783,12 @@ function sentenceEnds(line: string): number[] {
     // a short window so a long line is not re-sliced from its start each time.
     const before = line.slice(Math.max(0, m.index - 12), m.index)
     const word = (/([^\s]+)$/.exec(before)?.[1] ?? '').replace(/^[(["'*_\u2018\u201c]+/, '').toLowerCase()
-    const abbreviation = m[0][0] === '.' && m[0].length === 1 && ABBREVIATIONS.has(word)
+    // Also a dotted abbreviation ("e.g", "U.S") and a list number at the
+    // start of a line ("1. First").
+    const abbreviation =
+      m[0][0] === '.' &&
+      m[0].length === 1 &&
+      (ABBREVIATIONS.has(word) || /^[a-z](?:\.[a-z])+$/.test(word) || (/^\d+$/.test(word) && !line.slice(0, m.index - word.length).trim()))
     if (!abbreviation) ends.push(m.index + m[0].length)
   }
   return ends
@@ -828,12 +841,14 @@ function excerptAt(line: string, start: number, end: number, ends: number[] = se
   let we = end + tail
   // Start and stop on whole words, never inside the match.
   if (ws > from && !isGap(line[ws - 1])) {
-    const gap = line.indexOf(' ', ws)
-    ws = gap !== -1 && gap < start ? gap + 1 : start
+    let gap = ws
+    while (gap < start && !isGap(line[gap])) gap++
+    ws = gap < start ? gap + 1 : start
   }
   if (we < to && !isGap(line[we])) {
-    const gap = line.lastIndexOf(' ', we)
-    we = gap >= end ? gap : end
+    let gap = we
+    while (gap > end && !isGap(line[gap])) gap--
+    we = gap
   }
   while (we > end && isGap(line[we - 1])) we--
   return line.slice(ws, we)
