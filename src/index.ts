@@ -474,6 +474,10 @@ export function lint(
   const violations: Violation[] = []
   const mask = buildSkipMask(text)
   const lines = text.split('\n')
+  // The excerpt is cut from the text as written, not as straightened, so a
+  // host can find it in its own source. Straightening is one code unit for
+  // one, so the two line arrays share every offset.
+  const sourceLines = normalizeEol(stripBom(raw)).split('\n')
 
   const lineStarts: number[] = []
   let acc = 0
@@ -488,12 +492,12 @@ export function lint(
   // paragraph, and its first 80 characters are often not what was flagged.
   const push = (li: number, col: number, rule: string, suggestion: string, end = col + 1) => {
     if (mask[lineStarts[li] + col]) return
-    violations.push({ line: li + 1, rule, excerpt: excerptAt(lines[li], col, end), suggestion, severity: sev(rule) })
+    violations.push({ line: li + 1, rule, excerpt: excerptAt(sourceLines[li], col, end), suggestion, severity: sev(rule) })
   }
   // For rules where the skip mask must NOT apply: a hidden character inside a
   // code block or quote is more suspicious, not less.
   const pushAlways = (li: number, col: number, end: number, rule: string, suggestion: string) => {
-    violations.push({ line: li + 1, rule, excerpt: excerptAt(lines[li], col, end), suggestion, severity: sev(rule) })
+    violations.push({ line: li + 1, rule, excerpt: excerptAt(sourceLines[li], col, end), suggestion, severity: sev(rule) })
   }
 
   lines.forEach((line, li) => {
@@ -602,18 +606,30 @@ export function lint(
       // verb ("It leaks.", "They amplify the outage.") is what a token list
       // does, and it swallows plain two-sentence prose.
       //
-      // PROGRESSIVE: a negation followed by an -ing verb and its complement
-      // ("the inspector is not glancing for missing shingles. They are
-      // checking...") negates an ACTION, the same as `do not need` above, so
-      // it is left out. Only the form with a word after the -ing word counts
-      // as a verb: "The problem is not pricing. It is positioning." ends the
-      // clause on the -ing word, reads as a noun, and stays flagged, as do
-      // the -ing nouns in NOT_PROGRESSIVE ("This is not something...").
-      const NOT_PROGRESSIVE = `(?:[a-z]*thing|during|morning|evening|ceiling|string|spring|king|ring|wing)`
-      const PROGRESSIVE = `(?!\\s+(?!${NOT_PROGRESSIVE}\\b)[a-z]+ing\\s+[a-z])`
-      const NEG = `(?:\\b(?:is|are|was|were)\\s+not\\b|\\b(?:is|are|was|were|ca|wo)n'?t\\b|\\bcannot\\b|(?:'s|'re)\\s+not\\b)${PROGRESSIVE}`
+      // PROGRESSIVE: one action negated and another reported, by a plural
+      // or personal subject ("the inspector is not glancing for missing
+      // shingles. They are checking the drains.") is a description of what
+      // someone does, the same as `do not need` above, and is left out. All
+      // three conditions hold, or it reports:
+      //  - on the left, an -ing word, optionally after one -ly adverb,
+      //    followed by another word. "The problem is not pricing. It is positioning." ends the
+      //    clause on it and reads as a noun; `something` and the other -ing
+      //    nouns in NOT_PROGRESSIVE are nouns wherever they sit.
+      //  - a reassertion that is itself a progressive verb ("They are
+      //    checking"). "Flash and HTML5 are not directly competing
+      //    technologies. They are simply two different ways..." has an -ing
+      //    adjective on the left and an identity on the right, and reports.
+      //  - a reassertion by they/these/those. With it/this/that the -ing
+      //    phrase is an identity claim, which is the flourish itself:
+      //    "Success isn't getting more traffic. It's getting the right
+      //    traffic." Known cost: "Buyers aren't buying software. They're
+      //    buying outcomes." is the flourish too, and is left out with the
+      //    rest.
+      const NEG = `(?:\\b(?:is|are|was|were)\\s+not\\b|\\b(?:is|are|was|were|ca|wo)n'?t\\b|\\bcannot\\b|(?:'s|'re)\\s+not\\b)`
       const REASSERT = `(?:it|that|this|they|these|those)(?:\\s+(?:is|are|was|were|does|do|did|will|can)|'s|'re)\\b`
-      const reassert = new RegExp(`${NEG}[^.!?]{0,60}[.!?]\\s+${REASSERT}`, 'i')
+      const reassert = new RegExp(`(${NEG})[^.!?]{0,60}[.!?]\\s+(${REASSERT})`, 'gi')
+      const progressive = new RegExp(`^\\s+(?:[a-z]+ly\\s+)?(?!${NOT_PROGRESSIVE}\\b)[a-z]+ing\\s+[a-z]`, 'i')
+      const progressiveReply = new RegExp(`^\\s+(?:[a-z]+ly\\s+)?(?!${NOT_PROGRESSIVE}\\b)[a-z]+ing\\b`, 'i')
       const consequence = /\b(?:is|are)\s+not\s+[^,.;]{1,30},\s+(?:and\s+)?(?:until|unless)\b/i
       // The comma forms, mirrored from a production linter tuned on real copy: the
       // 60-char cap and the no-sentence-punctuation middle keep a match inside
@@ -627,7 +643,17 @@ export function lint(
         spans.push([start, end])
         push(li, start, 'contrast-slop', '"Not X, it\'s Y" flourish. State what it IS directly; one deliberate, concrete reclassification per piece at most.', end)
       }
-      if ((m = reassert.exec(line))) hit(m.index, m.index + m[0].length)
+      while ((m = reassert.exec(line))) {
+        const actionToAction =
+          progressive.test(line.slice(m.index + m[1].length)) &&
+          /^(?:they|these|those)\b/i.test(m[2]) &&
+          progressiveReply.test(line.slice(m.index + m[0].length))
+        if (!actionToAction) {
+          hit(m.index, m.index + m[0].length)
+          break
+        }
+        reassert.lastIndex = m.index + 1
+      }
       if ((m = consequence.exec(line))) hit(m.index, m.index + m[0].length)
       while ((m = commaForm.exec(line))) hit(m.index, m.index + m[0].length)
       while ((m = notJustBut.exec(line))) hit(m.index, m.index + m[0].length)
@@ -707,47 +733,86 @@ export function lint(
   return violations.sort((a, b) => a.line - b.line)
 }
 
+// -ing words that are nouns, never a progressive verb (see contrastSlop).
+const NOT_PROGRESSIVE = `(?:[a-z]*thing|during|morning|evening|ceiling|string|spring|king|ring|wing)`
+
 /** Longest excerpt a finding quotes. */
 const EXCERPT_MAX = 200
-// A sentence ends at . ! or ?, optionally followed by a closing quote or
-// bracket, then whitespace or the end of the line.
-const SENTENCE_END = /[.!?]["')\]]*(?=\s|$)/g
+// A period after one of these is not a sentence end ("Dr. Smith").
+const ABBREVIATIONS = new Set(['dr', 'mr', 'mrs', 'ms', 'st', 'jr', 'sr', 'vs', 'cf', 'fig', 'e.g', 'i.e'])
+// A run of . ! ? and any closing quotes or brackets, then spaces or tabs and
+// something that is not a lowercase letter, or the end of the line. Only
+// ASCII space and tab count as the gap: a no-break or zero-width space is
+// itself a finding (invisible-unicode), and must stay inside the excerpt that
+// reports it. Requiring a non-lowercase start is what keeps "e.g. the roof"
+// and "we waited... and waited" one sentence.
+const SENTENCE_END = /[.!?]+["'\u2019\u201d)\]]*(?=[ \t]+(?![a-z])|[ \t]*$)/g
+
+/** Where each sentence of `line` ends (exclusive offsets). */
+function sentenceEnds(line: string): number[] {
+  const ends: number[] = []
+  SENTENCE_END.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = SENTENCE_END.exec(line))) {
+    const word = /([^\s(["']+)$/.exec(line.slice(0, m.index))?.[1]?.toLowerCase() ?? ''
+    const abbreviation = m[0][0] === '.' && m[0].length === 1 && (ABBREVIATIONS.has(word) || /^[a-z]$/.test(word))
+    if (!abbreviation) ends.push(m.index + m[0].length)
+  }
+  return ends
+}
+
+const isGap = (c: string | undefined) => c === ' ' || c === '\t'
 
 /**
  * The text a finding quotes: from the start of the sentence that holds the
  * match through the end of the sentence the match ends in, so a reviewer (or
  * a fix that edits only the quoted text) sees the flagged words in context.
- * Capped at EXCERPT_MAX; when the cap bites, the matched span is kept and the
- * sentence's lead-in is what gets cut.
  *
- * Every returned excerpt is a verbatim substring of the line, so a caller can
- * search the source for it.
+ * Always a verbatim substring of `line`. Capped at EXCERPT_MAX: when the
+ * sentence is longer, the excerpt is the match with as much of the sentence
+ * on each side as the cap allows, cut on word boundaries. The match itself is
+ * kept whole unless it is longer than the cap, in which case its first
+ * EXCERPT_MAX characters are the excerpt.
  */
 function excerptAt(line: string, start: number, end: number): string {
   start = Math.max(0, Math.min(start, line.length))
   end = Math.max(start, Math.min(end, line.length))
+  const ends = sentenceEnds(line)
   let from = 0
-  SENTENCE_END.lastIndex = 0
-  let m: RegExpExecArray | null
-  // The last sentence end that closes BEFORE the match begins. Punctuation
-  // inside the match (an ellipsis, the period in a two-sentence flourish) is
-  // never the boundary.
-  while ((m = SENTENCE_END.exec(line)) && m.index + m[0].length <= start) from = m.index + m[0].length
+  for (const e of ends) if (e <= start) from = e
   let to = line.length
-  SENTENCE_END.lastIndex = Math.max(start, end - 1)
-  if ((m = SENTENCE_END.exec(line))) to = m.index + m[0].length
-  let quote = line.slice(from, to).trim()
-  if (quote.length <= EXCERPT_MAX) return quote
-  // Too long. Keep the lead-in when the sentence start through the end of the
-  // match fits, and cut the tail at a word boundary; otherwise start at the
-  // match itself.
-  const lead = line.slice(from, end).trimStart()
-  const base = lead.length <= EXCERPT_MAX ? line.slice(from).trimStart() : line.slice(start)
-  quote = base.slice(0, EXCERPT_MAX)
-  const keep = lead.length <= EXCERPT_MAX ? lead.length : end - start
-  const lastSpace = quote.lastIndexOf(' ')
-  if (lastSpace >= keep) quote = quote.slice(0, lastSpace)
-  return quote.trimEnd()
+  for (const e of ends) {
+    if (e >= end) {
+      to = e
+      break
+    }
+  }
+  while (from < start && isGap(line[from])) from++
+  while (to > end && isGap(line[to - 1])) to--
+  if (to - from <= EXCERPT_MAX) return line.slice(from, to)
+  if (end - start > EXCERPT_MAX) return line.slice(start, start + EXCERPT_MAX)
+
+  // The budget left after the match is shared between the text before it
+  // and the text after it: each side gets what it needs when the other needs
+  // less than half, and half otherwise.
+  const spare = EXCERPT_MAX - (end - start)
+  const leadWant = start - from
+  const tailWant = to - end
+  const lead = Math.min(leadWant, Math.max(spare - tailWant, Math.floor(spare / 2)))
+  const tail = Math.min(tailWant, spare - lead)
+  let ws = start - lead
+  let we = end + tail
+  // Start and stop on whole words, never inside the match.
+  if (ws > from && !isGap(line[ws - 1])) {
+    const gap = line.indexOf(' ', ws)
+    ws = gap !== -1 && gap < start ? gap + 1 : start
+  }
+  if (we < to && !isGap(line[we])) {
+    const gap = line.lastIndexOf(' ', we)
+    we = gap >= end ? gap : end
+  }
+  while (we > end && isGap(line[we - 1])) we--
+  return line.slice(ws, we)
 }
 
 // A heading is a SUMMARY of its section: the prose never builds off it. This
@@ -766,6 +831,7 @@ export function headingDependentOpeners(md: string): Violation[] {
   // passing smart-quoted prose would silently get nothing. Straightening is
   // index-preserving, so the line numbers below stay correct.
   const lines = normalizeEol(stripBom(straighten(md))).split('\n')
+  const source = normalizeEol(stripBom(md)).split('\n')
   for (let i = 0; i < lines.length; i++) {
     const h = lines[i].match(/^#{2,6}\s+(.+)/)
     if (!h) continue
@@ -773,11 +839,13 @@ export function headingDependentOpeners(md: string): Violation[] {
       const t = lines[j].trim()
       if (!t) continue
       if (/^#{1,6}\s/.test(t) || /^(\||-|\*|\d+\.|>|```)/.test(t)) break
-      if (REFERRING_OPENER.test(t)) {
+      const opener = REFERRING_OPENER.exec(t)
+      if (opener) {
+        const at = lines[j].length - lines[j].trimStart().length
         out.push({
           line: j + 1,
           rule: 'heading-dependent-opener',
-          excerpt: t.slice(0, 80),
+          excerpt: excerptAt(source[j], at, at + opener[0].length),
           suggestion: `Opens on a referring word whose antecedent is the heading ("${h[1].trim()}"). Re-name the subject.`,
         })
       }
@@ -801,6 +869,7 @@ export function demonstrativeHeadings(md: string): Violation[] {
   // passing smart-quoted prose would silently get nothing. Straightening is
   // index-preserving, so the line numbers below stay correct.
   const lines = normalizeEol(stripBom(straighten(md))).split('\n')
+  const source = normalizeEol(stripBom(md)).split('\n')
   let inFence = false
   lines.forEach((line, i) => {
     if (/^\s*```/.test(line)) inFence = !inFence
@@ -816,7 +885,7 @@ export function demonstrativeHeadings(md: string): Violation[] {
       out.push({
         line: i + 1,
         rule: 'demonstrative-heading',
-        excerpt: line.trim().slice(0, 80),
+        excerpt: excerptAt(source[i], line.indexOf('#'), line.trimEnd().length),
         suggestion: `Heading ends on a bare "${last}" — name the thing.`,
       })
     }

@@ -18,18 +18,22 @@ _Nothing yet._
   it. A host that hands the excerpt to an editor, or asks a model to rewrite
   the quoted text, was pointing it at the wrong words. The excerpt now runs
   from the start of the matched sentence through the end of the sentence the
-  match ends in, is capped at 200 characters with the match always kept, and
-  is always a verbatim substring of the line. Every per-line rule gets it,
-  `invisible-unicode` included.
-- `contrast-slop` no longer fires on a negated progressive verb, which
-  negates an action and then says what happens instead. The rule already
-  excluded `do not need` for the same reason. Now clean:
+  match ends in, and is always a verbatim substring of the source line, smart
+  quotes included. A sentence ends at `.`, `!` or `?` before a capital, so
+  `e.g. the`, `Dr. Smith` and `waited... and` stay whole. Over 200 characters
+  the excerpt is the match with as much of its sentence on each side as fits;
+  a match longer than 200 characters is cut to its first 200. Every rule gets
+  it, `invisible-unicode`, `heading-dependent-opener` and
+  `demonstrative-heading` included.
+- `contrast-slop` no longer fires when one action is negated and another
+  reported by `they`/`these`/`those`. The rule already excluded `do not need`
+  for the same reason. Now clean:
   `The inspector is not glancing at shingles. They are checking drains.`
-  Still reported, the identity form and an `-ing` noun that ends its clause:
+  Still reported, the identity form and the `-ing` identity:
   `This is not a sales visit. It is an inspection.`
-  `The problem is not pricing. It is positioning.`
-  The corpus harness shows no change in either direction: no corpus line had
-  the excluded shape.
+  `Success isn't getting more traffic. It's getting the right traffic.`
+  RULES.md has the exact conditions and the known cost. Every rule's count on
+  the corpus harness is unchanged.
 
 ## 0.6.0 (2026-09-08)
 

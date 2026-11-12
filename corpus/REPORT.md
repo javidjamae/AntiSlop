@@ -155,13 +155,13 @@ An entry firing often here is a candidate for demotion to the opt-in pack.
 **`contrast-slop`**
 
 - gpt-wiki-intro (machine): She's not verypopular at school, and she doesn't have many friends. That's why she's excited when she gets a new couch to sit on at he
-- gpt-wiki-intro (machine): Our eyes usually adapt quickly to changes in our environment, but sometimes they can't adapt fast enough or they adapt in the wrong wa
-- hc3-eli5 (machine): It's important to remember that while TOR can help protect your anonymity online, it is not a guarantee of complete anonymity. It's always a
+- gpt-wiki-intro (machine): adapt quickly to changes in our environment, but sometimes they can't adapt fast enough or they adapt in the wrong way. This can lead 
+- hc3-eli5 (machine): to remember that while TOR can help protect your anonymity online, it is not a guarantee of complete anonymity. It's always a good idea to u
 
 **`ellipsis`**
 
 - gpt-wiki-intro (machine): She decides to try and make up for it by doing some chores for her grandparent, but things don't go as planned...
-- hc3-eli5 (machine): For example, the set of all positive integers (1, 2, 3, 4, ...)
+- hc3-eli5 (machine): For example, the set of all positive integers (1, 2, 3, 4, ...) has an infinite number of elements, so it has a cardinality of infinity.
 - essay/claude: Simmel writes that "the contents of interaction...crystallize into forms that dominate and regulate further interactions."
 
 **`em-dash`**
@@ -176,7 +176,7 @@ An entry firing often here is a candidate for demotion to the opt-in pack.
 
 **`reversed-antithesis`**
 
-- essay/gpt: Johnson's genuine interest in her as a person, not just a medical case, allowed her to open up and trust him.
+- essay/gpt: Dr. Johnson's genuine interest in her as a person, not just a medical case, allowed her to open up and trust him.
 - essay/gpt: By taking these steps, we can create a future where individuals are valued based on their abilities, not their gender, and where discrimination and h
 - essay/claude: The story suggests human existence can only be fulfilled through an acceptance of the magical and mystical, not by reason alone.
 
@@ -190,14 +190,14 @@ An entry firing often here is a candidate for demotion to the opt-in pack.
 
 **`banned opener`**
 
-- rust-book: Let's explore how and why Rust encourages you to favor immutability and why
-- rust-book: Here's what the countdown would look like using a `for` loop and another method
-- rust-book: Let's explore some of those situations now.
+- rust-book: Let’s explore how and why Rust encourages you to favor immutability and why
+- rust-book: Here’s what the countdown would look like using a `for` loop and another method
+- rust-book: Let’s explore some of those situations now.
 
 **`banned phrase`**
 
 - rust-book: chapters might not delve into details on a topic; we typically revisit the
-- rust-book: We now have a straightforward API that's much harder to mess up, because the
+- rust-book: We now have a straightforward API that’s much harder to mess up, because the
 - rust-book: the definitions they wanted to use because they could navigate the code based
 
 **`bold-overuse`**
@@ -207,8 +207,8 @@ An entry firing often here is a candidate for demotion to the opt-in pack.
 
 **`contrast-slop`**
 
-- rust-book: It's not the prettiest output, but it shows the values of all the fields
-- rust-book: values are valid first and panic if the values aren't valid. This is mostly for
+- rust-book: It’s not the prettiest output, but it shows the values of all the fields
+- rust-book: values are valid first and panic if the values aren’t valid. This is mostly for
 - k8s-concepts: Resource creation isn't the only operation that `kubectl` can perform in bulk. It can also extract resource names from configuration files in orde
 
 **`demonstrative-heading`**
@@ -217,7 +217,7 @@ An entry firing often here is a candidate for demotion to the opt-in pack.
 
 **`ellipsis`**
 
-- rust-book: tests::it_adds_two ...
+- rust-book: tests::it_adds_two ... ok`, and the `ok` text indicates that our test passed!
 - k8s-concepts: 40s, …), that is capped at five minutes.
 - mdn-guides: The border is also established with a 2-pixel width and a border color that won't last, courtesy of the JavaScript below\...
 
@@ -225,7 +225,7 @@ An entry firing often here is a candidate for demotion to the opt-in pack.
 
 - rust-book: That makes you a Rust programmer—welcome!
 - rust-book: we pass to it, but it also returns a value—in this case, an
-- rust-book: immutable by default—they're always immutable.
+- rust-book: immutable by default—they’re always immutable.
 
 **`emoji-decoration`**
 
