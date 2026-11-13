@@ -474,6 +474,18 @@ export function lint(
   const violations: Violation[] = []
   const mask = buildSkipMask(text)
   const lines = text.split('\n')
+  // The excerpt is cut from the text as written, not as straightened, so a
+  // host can find it in its own source. Straightening is one code unit for
+  // one, so the two line arrays share every offset.
+  const source = normalizeEol(stripBom(raw))
+  const sourceLines = source.split('\n')
+  // Sentence ends per line, found once, on the first finding that needs them.
+  const endsCache = new Map<number, number[]>()
+  const excerpt = (li: number, col: number, end: number) => {
+    let ends = endsCache.get(li)
+    if (!ends) endsCache.set(li, (ends = sentenceEnds(sourceLines[li])))
+    return excerptAt(sourceLines[li], col, end, ends)
+  }
 
   const lineStarts: number[] = []
   let acc = 0
@@ -483,14 +495,17 @@ export function lint(
   }
 
   const sev = (rule: string) => severityOf(rule, extras.severities)
-  const push = (li: number, col: number, rule: string, suggestion: string) => {
+  // `col`..`end` is the matched span. The excerpt quotes the sentence that
+  // holds it (see excerptAt), not the start of the line: a "line" is a whole
+  // paragraph, and its first 80 characters are often not what was flagged.
+  const push = (li: number, col: number, rule: string, suggestion: string, end: number) => {
     if (mask[lineStarts[li] + col]) return
-    violations.push({ line: li + 1, rule, excerpt: lines[li].trim().slice(0, 80), suggestion, severity: sev(rule) })
+    violations.push({ line: li + 1, rule, excerpt: excerpt(li, col, end), suggestion, severity: sev(rule) })
   }
   // For rules where the skip mask must NOT apply: a hidden character inside a
   // code block or quote is more suspicious, not less.
-  const pushAlways = (li: number, rule: string, suggestion: string) => {
-    violations.push({ line: li + 1, rule, excerpt: lines[li].trim().slice(0, 80), suggestion, severity: sev(rule) })
+  const pushAlways = (li: number, col: number, end: number, rule: string, suggestion: string) => {
+    violations.push({ line: li + 1, rule, excerpt: excerpt(li, col, end), suggestion, severity: sev(rule) })
   }
 
   lines.forEach((line, li) => {
@@ -498,10 +513,10 @@ export function lint(
 
     // Artifacts with no legitimate prose use — always on.
     const mathBold = /[\u{1D400}-\u{1D7FF}]/gu
-    while ((m = mathBold.exec(line))) push(li, m.index, 'unicode-bold', 'Use markdown **bold**, not unicode math characters.')
+    while ((m = mathBold.exec(line))) push(li, m.index, 'unicode-bold', 'Use markdown **bold**, not unicode math characters.', m.index + m[0].length)
 
     const bubble = /💬.{0,60}(Question:|\?)/iu
-    if ((m = bubble.exec(line))) push(li, m.index, 'engagement-bait', 'Remove the speech-bubble-before-question. Reads as AI bait.')
+    if ((m = bubble.exec(line))) push(li, m.index, 'engagement-bait', 'Remove the speech-bubble-before-question. Reads as AI bait.', m.index + m[0].length)
 
     // Invisible / nonstandard Unicode — zero-width characters, soft hyphens,
     // directional marks, nonstandard spaces, variation selectors, and the tag
@@ -528,6 +543,8 @@ export function lint(
       const run = isVariationSelector(cp) && (isVariationSelector(prev) || isVariationSelector(next))
       pushAlways(
         li,
+        inv.index,
+        inv.index + inv.length,
         'invisible-unicode',
         `${charName(cp)} (U+${cp.toString(16).toUpperCase().padStart(4, '0')})${run ? ' in a variation-selector RUN — the shape of hidden encoded data' : ''}. Delete it or replace with the plain equivalent; these arrive via copy-paste, generation artifacts, or deliberate fingerprinting.`
       )
@@ -535,12 +552,12 @@ export function lint(
 
     if (rules.emDash) {
       const emDash = /—/g
-      while ((m = emDash.exec(line))) push(li, m.index, 'em-dash', 'Use a period, comma, or restructure. Em-dashes are a common AI tell.')
+      while ((m = emDash.exec(line))) push(li, m.index, 'em-dash', 'Use a period, comma, or restructure. Em-dashes are a common AI tell.', m.index + m[0].length)
     }
 
     if (rules.ellipsis) {
       const ellipsis = /…|\.\.\./g
-      while ((m = ellipsis.exec(line))) push(li, m.index, 'ellipsis', 'Finish the thought or start a new sentence; dramatic ellipses read as AI.')
+      while ((m = ellipsis.exec(line))) push(li, m.index, 'ellipsis', 'Finish the thought or start a new sentence; dramatic ellipses read as AI.', m.index + m[0].length)
     }
 
     // Arrows in narrative prose are a tell, but three uses are universal
@@ -560,18 +577,18 @@ export function lint(
       const arrow = /[→⇒←]/gu
       while ((m = arrow.exec(line))) {
         if (arrowExempt(line, m.index, extras.arrows)) continue
-        push(li, m.index, 'arrow-symbol', 'Use "means," "leads to," "so," or restructure.')
+        push(li, m.index, 'arrow-symbol', 'Use "means," "leads to," "so," or restructure.', m.index + m[0].length)
       }
     }
 
     if (rules.hrDivider && line.trim() === '---') {
-      push(li, Math.max(0, line.indexOf('-')), 'horizontal-rule', 'Use a heading or white space, not a --- divider.')
+      push(li, Math.max(0, line.indexOf('-')), 'horizontal-rule', 'Use a heading or white space, not a --- divider.', line.length)
     }
 
     if (rules.bannedOpeners) {
       for (const opener of openers) {
         const re = new RegExp(`(^\\s*|\\.\\s+)(${escapeRegex(opener)})\\b`, 'i')
-        if ((m = re.exec(line))) push(li, m.index + m[1].length, `banned opener: "${opener}"`, 'Overused AI opener. State the thing directly.')
+        if ((m = re.exec(line))) push(li, m.index + m[1].length, `banned opener: "${opener}"`, 'Overused AI opener. State the thing directly.', m.index + m[0].length)
       }
     }
 
@@ -596,9 +613,29 @@ export function lint(
       // REASSERTION: a copula or auxiliary follow-up. Widening to any lexical
       // verb ("It leaks.", "They amplify the outage.") is what a token list
       // does, and it swallows plain two-sentence prose.
-      const NEG = `(?:\\b(?:is|are|was|were)\\s+not\\b|\\b(?:is|are|was|were|ca|wo)n'?t\\b|\\bcannot\\b|(?:'s|'re)\\s+not\\b)`
-      const REASSERT = `(?:it|that|this|they|these|those)(?:\\s+(?:is|are|was|were|does|do|did|will|can)|'s|'re)\\b`
-      const reassert = new RegExp(`${NEG}[^.!?]{0,60}[.!?]\\s+${REASSERT}`, 'i')
+      //
+      // PROGRESSIVE: one action negated and another reported, by a plural
+      // or personal subject ("the inspector is not glancing for missing
+      // shingles. They are checking the drains.") is a description of what
+      // someone does, the same as `do not need` above, and is left out. All
+      // three conditions hold, or it reports:
+      //  - on the left, an -ing word, optionally after one -ly adverb,
+      //    followed by a verb's complement (VERB_COMPLEMENT). "These aren't
+      //    marketing tactics." has a noun after it and reports. "The problem is not pricing. It is positioning." ends the
+      //    clause on it and reads as a noun; `something` and the other -ing
+      //    nouns in NOT_PROGRESSIVE are nouns wherever they sit.
+      //  - a reassertion that is itself a progressive verb ("They are
+      //    checking"). "Flash and HTML5 are not directly competing
+      //    technologies. They are simply two different ways..." has an -ing
+      //    adjective on the left and an identity on the right, and reports.
+      //  - a reassertion by they/these/those. With it/this/that the -ing
+      //    phrase is an identity claim, which is the flourish itself:
+      //    "Success isn't getting more traffic. It's getting the right
+      //    traffic." Known cost: an action-to-action flourish with a
+      //    determiner, such as "Buyers aren't buying a tool. They're buying
+      //    an outcome.", is left out with the rest.
+      const reassert = CONTRAST_REASSERT
+      reassert.lastIndex = 0
       const consequence = /\b(?:is|are)\s+not\s+[^,.;]{1,30},\s+(?:and\s+)?(?:until|unless)\b/i
       // The comma forms, mirrored from a production linter tuned on real copy: the
       // 60-char cap and the no-sentence-punctuation middle keep a match inside
@@ -610,9 +647,19 @@ export function lint(
       const hit = (start: number, end: number) => {
         if (spans.some(([s, e]) => start < e && end > s)) return
         spans.push([start, end])
-        push(li, start, 'contrast-slop', '"Not X, it\'s Y" flourish. State what it IS directly; one deliberate, concrete reclassification per piece at most.')
+        push(li, start, 'contrast-slop', '"Not X, it\'s Y" flourish. State what it IS directly; one deliberate, concrete reclassification per piece at most.', end)
       }
-      if ((m = reassert.exec(line))) hit(m.index, m.index + m[0].length)
+      while ((m = reassert.exec(line))) {
+        const actionToAction =
+          CONTRAST_PROGRESSIVE.test(line.slice(m.index + m[1].length)) &&
+          /^(?:they|these|those)\b/i.test(m[2]) &&
+          CONTRAST_PROGRESSIVE_REPLY.test(line.slice(m.index + m[0].length))
+        if (!actionToAction) {
+          hit(m.index, m.index + m[0].length)
+          break
+        }
+        reassert.lastIndex = m.index + 1
+      }
       if ((m = consequence.exec(line))) hit(m.index, m.index + m[0].length)
       while ((m = commaForm.exec(line))) hit(m.index, m.index + m[0].length)
       while ((m = notJustBut.exec(line))) hit(m.index, m.index + m[0].length)
@@ -621,7 +668,7 @@ export function lint(
     if (rules.reversedAntithesis) {
       const reversed = /,\s+(?:not|never)\s+(?:just\s+)?[^,;:.!?]{2,70}(?=[,.!?;:]|$)/gi
       while ((m = reversed.exec(line))) {
-        push(li, m.index, 'reversed-antithesis', 'Trailing "X, not Y" contrast. Delete the contrast: if no information is lost it was a flourish — cut it. Keep it only when the contrast IS the point.')
+        push(li, m.index, 'reversed-antithesis', 'Trailing "X, not Y" contrast. Delete the contrast: if no information is lost it was a flourish — cut it. Keep it only when the contrast IS the point.', m.index + m[0].length)
       }
     }
 
@@ -634,7 +681,7 @@ export function lint(
     if (rules.revealShape) {
       for (const re of REVEAL_SHAPE) {
         if ((m = re.exec(line))) {
-          push(li, m.index, 'reveal-shape', 'Teases the point instead of stating it, and casts the reader as the one getting it wrong. Say the thing directly.')
+          push(li, m.index, 'reveal-shape', 'Teases the point instead of stating it, and casts the reader as the one getting it wrong. Say the thing directly.', m.index + m[0].length)
           break
         }
       }
@@ -642,12 +689,12 @@ export function lint(
 
     if (rules.inlineHeaderBullets) {
       const ihb = /^(\s*[-*+]\s+)\*\*[^*\n]+?(?::\*\*|\*\*:)/
-      if ((m = ihb.exec(line))) push(li, m[1].length, 'inline-header-bullet', 'Rewrite "**Term:** sentence" bullets as prose or plain list items.')
+      if ((m = ihb.exec(line))) push(li, m[1].length, 'inline-header-bullet', 'Rewrite "**Term:** sentence" bullets as prose or plain list items.', m[0].length)
     }
 
     if (rules.emojiDecor) {
       const emoji = /(?![©®™])\p{Extended_Pictographic}/gu
-      while ((m = emoji.exec(line))) push(li, m.index, 'emoji-decoration', 'Drop the emoji; decorated headings/bullets read as AI.')
+      while ((m = emoji.exec(line))) push(li, m.index, 'emoji-decoration', 'Drop the emoji; decorated headings/bullets read as AI.', m.index + m[0].length)
     }
 
     if (rules.boldOveruse && !line.trimStart().startsWith('|')) {
@@ -656,7 +703,7 @@ export function lint(
       while ((m = bold.exec(line))) {
         if (mask[lineStarts[li] + m.index]) continue
         if (++boldCount === 3) {
-          push(li, m.index, 'bold-overuse', '3+ bold spans in one paragraph. Bold at most the one phrase that matters, or none.')
+          push(li, m.index, 'bold-overuse', '3+ bold spans in one paragraph. Bold at most the one phrase that matters, or none.', m.index + m[0].length)
           break
         }
       }
@@ -673,23 +720,138 @@ export function lint(
       const [start, end] = [m.index, m.index + m[0].length]
       if (phraseSpans.some(([s, e]) => start < e && end > s)) continue
       phraseSpans.push([start, end])
-      push(li, start, `banned phrase: "${phrase}"`, 'AI filler. Rephrase or cut.')
+      push(li, start, `banned phrase: "${phrase}"`, 'AI filler. Rephrase or cut.', end)
     }
 
     for (const cr of extras.customRules ?? []) {
-      if ((m = cr.re.exec(line))) push(li, m.index, `custom: ${cr.id}`, cr.suggestion ?? 'Site rule.')
+      if ((m = cr.re.exec(line))) push(li, m.index, `custom: ${cr.id}`, cr.suggestion ?? 'Site rule.', m.index + m[0].length)
     }
   })
 
   // Structural rules (markdown-aware, multi-line).
   if (rules.headingDependentOpener) {
-    for (const v of headingDependentOpeners(text)) violations.push({ ...v, severity: sev(v.rule) })
+    for (const v of headingDependentOpeners(source)) violations.push({ ...v, severity: sev(v.rule) })
   }
   if (rules.demonstrativeHeading) {
-    for (const v of demonstrativeHeadings(text)) violations.push({ ...v, severity: sev(v.rule) })
+    for (const v of demonstrativeHeadings(source)) violations.push({ ...v, severity: sev(v.rule) })
   }
 
   return violations.sort((a, b) => a.line - b.line)
+}
+
+// -ing words that are nouns, never a progressive verb (see contrastSlop). An
+// explicit list: a `[a-z]*thing` family would also swallow breathing, bathing
+// and soothing, which are verbs.
+const NOT_PROGRESSIVE = `(?:thing|nothing|something|anything|everything|clothing|plaything|during|morning|evening|ceiling|string|spring|king|ring|wing)`
+// contrastSlop's patterns. Built once: the reassertion regex is global and
+// stateful, so each line resets its lastIndex.
+const CONTRAST_NEG = `(?:\\b(?:is|are|was|were)\\s+not\\b|\\b(?:is|are|was|were|ca|wo)n'?t\\b|\\bcannot\\b|(?:'s|'re)\\s+not\\b)`
+const CONTRAST_REASSERT_TAIL = `(?:it|that|this|they|these|those)(?:\\s+(?:is|are|was|were|does|do|did|will|can)|'s|'re)\\b`
+const CONTRAST_REASSERT = new RegExp(`(${CONTRAST_NEG})[^.!?]{0,60}[.!?]\\s+(${CONTRAST_REASSERT_TAIL})`, 'gi')
+// An -ing verb, optionally after one -ly adverb. Shared by both sides.
+const ING_VERB = `^\\s+(?:[a-z]+ly\\s+)?(?!${NOT_PROGRESSIVE}\\b)[a-z]+ing`
+// What follows a verb and not a noun modifier: a determiner, a preposition,
+// a pronoun or an -ly adverb. "glancing for", "checking the logs" and
+// "breathing heavily" are actions; "marketing tactics" and "boring meetings"
+// are nouns, and their sentence is an identity claim.
+const VERB_COMPLEMENT = `(?:a|an|the|this|that|these|those|my|your|his|her|its|our|their|some|any|every|each|no|more|all|it|them|him|me|us|you|for|at|to|in|on|with|from|into|through|about|over|under|around|up|down|out|off|by|of|[a-z]+ly)\\b`
+const CONTRAST_PROGRESSIVE = new RegExp(`${ING_VERB}\\s+${VERB_COMPLEMENT}`, 'i')
+const CONTRAST_PROGRESSIVE_REPLY = new RegExp(`${ING_VERB}\\b`, 'i')
+
+/** Longest excerpt a finding quotes. */
+const EXCERPT_MAX = 200
+// A period after one of these is not a sentence end ("Dr. Smith"). Single
+// initials are not on it: "plan B." and "Vitamin C." end sentences far more
+// often in prose than "J. Smith" sits mid-sentence.
+const ABBREVIATIONS = new Set(['dr', 'mr', 'mrs', 'ms', 'st', 'jr', 'sr', 'vs', 'cf', 'fig', 'inc', 'ltd', 'approx', 'no'])
+// A run of . ! ? and any closing quotes or brackets, then spaces or tabs and
+// something that is not a lowercase letter, or the end of the line. Only
+// ASCII space and tab count as the gap: a no-break or zero-width space is
+// itself a finding (invisible-unicode), and must stay inside the excerpt that
+// reports it. Requiring a non-lowercase start is what keeps "e.g. the roof"
+// and "we waited... and waited" one sentence.
+const SENTENCE_END = /[.!?]+["'\u2019\u201d)\]*_]*(?=[ \t]+(?![ \ta-z])|[ \t]*$)/g
+
+/** Where each sentence of `line` ends (exclusive offsets). */
+function sentenceEnds(line: string): number[] {
+  const ends: number[] = []
+  SENTENCE_END.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = SENTENCE_END.exec(line))) {
+    // The word before the period, without the quotes, brackets and emphasis
+    // marks that wrap it ("**Dr. Smith**", "\u2018Dr. Smith\u2019"). Read from
+    // a short window so a long line is not re-sliced from its start each time.
+    const before = line.slice(Math.max(0, m.index - 12), m.index)
+    const word = (/([^\s]+)$/.exec(before)?.[1] ?? '').replace(/^[(["'*_\u2018\u201c]+/, '').toLowerCase()
+    // Also a dotted abbreviation ("e.g", "U.S") and a list number at the
+    // start of a line ("1. First").
+    const abbreviation =
+      m[0][0] === '.' &&
+      m[0].length === 1 &&
+      (ABBREVIATIONS.has(word) || /^[a-z](?:\.[a-z])+$/.test(word) || (/^\d+$/.test(word) && !line.slice(0, m.index - word.length).trim()))
+    if (!abbreviation) ends.push(m.index + m[0].length)
+  }
+  return ends
+}
+
+const isGap = (c: string | undefined) => c === ' ' || c === '\t'
+const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff
+
+/**
+ * The text a finding quotes: from the start of the sentence that holds the
+ * match through the end of the sentence the match ends in, so a reviewer (or
+ * a fix that edits only the quoted text) sees the flagged words in context.
+ *
+ * Always a verbatim substring of `line`. Capped at EXCERPT_MAX: when the
+ * sentence is longer, the excerpt is the match with as much of the sentence
+ * on each side as the cap allows, cut on word boundaries. The match itself is
+ * kept whole unless it is longer than the cap, in which case its first
+ * EXCERPT_MAX characters are the excerpt.
+ */
+function excerptAt(line: string, start: number, end: number, ends: number[] = sentenceEnds(line)): string {
+  start = Math.max(0, Math.min(start, line.length))
+  end = Math.max(start, Math.min(end, line.length))
+  let from = 0
+  for (const e of ends) if (e <= start) from = e
+  let to = line.length
+  for (const e of ends) {
+    if (e >= end) {
+      to = e
+      break
+    }
+  }
+  while (from < start && isGap(line[from])) from++
+  while (to > end && isGap(line[to - 1])) to--
+  if (to - from <= EXCERPT_MAX) return line.slice(from, to)
+  if (end - start > EXCERPT_MAX) {
+    // Never end on half of a surrogate pair.
+    const cut = isHighSurrogate(line.charCodeAt(start + EXCERPT_MAX - 1)) ? EXCERPT_MAX - 1 : EXCERPT_MAX
+    return line.slice(start, start + cut)
+  }
+
+  // The budget left after the match is shared between the text before it
+  // and the text after it: each side gets what it needs when the other needs
+  // less than half, and half otherwise.
+  const spare = EXCERPT_MAX - (end - start)
+  const leadWant = start - from
+  const tailWant = to - end
+  const lead = Math.min(leadWant, Math.max(spare - tailWant, Math.floor(spare / 2)))
+  const tail = Math.min(tailWant, spare - lead)
+  let ws = start - lead
+  let we = end + tail
+  // Start and stop on whole words, never inside the match.
+  if (ws > from && !isGap(line[ws - 1])) {
+    let gap = ws
+    while (gap < start && !isGap(line[gap])) gap++
+    ws = gap < start ? gap + 1 : start
+  }
+  if (we < to && !isGap(line[we])) {
+    let gap = we
+    while (gap > end && !isGap(line[gap])) gap--
+    we = gap
+  }
+  while (we > end && isGap(line[we - 1])) we--
+  return line.slice(ws, we)
 }
 
 // A heading is a SUMMARY of its section: the prose never builds off it. This
@@ -708,6 +870,7 @@ export function headingDependentOpeners(md: string): Violation[] {
   // passing smart-quoted prose would silently get nothing. Straightening is
   // index-preserving, so the line numbers below stay correct.
   const lines = normalizeEol(stripBom(straighten(md))).split('\n')
+  const source = normalizeEol(stripBom(md)).split('\n')
   for (let i = 0; i < lines.length; i++) {
     const h = lines[i].match(/^#{2,6}\s+(.+)/)
     if (!h) continue
@@ -715,11 +878,13 @@ export function headingDependentOpeners(md: string): Violation[] {
       const t = lines[j].trim()
       if (!t) continue
       if (/^#{1,6}\s/.test(t) || /^(\||-|\*|\d+\.|>|```)/.test(t)) break
-      if (REFERRING_OPENER.test(t)) {
+      const opener = REFERRING_OPENER.exec(t)
+      if (opener) {
+        const at = lines[j].length - lines[j].trimStart().length
         out.push({
           line: j + 1,
           rule: 'heading-dependent-opener',
-          excerpt: t.slice(0, 80),
+          excerpt: excerptAt(source[j], at, at + opener[0].length),
           suggestion: `Opens on a referring word whose antecedent is the heading ("${h[1].trim()}"). Re-name the subject.`,
         })
       }
@@ -743,6 +908,7 @@ export function demonstrativeHeadings(md: string): Violation[] {
   // passing smart-quoted prose would silently get nothing. Straightening is
   // index-preserving, so the line numbers below stay correct.
   const lines = normalizeEol(stripBom(straighten(md))).split('\n')
+  const source = normalizeEol(stripBom(md)).split('\n')
   let inFence = false
   lines.forEach((line, i) => {
     if (/^\s*```/.test(line)) inFence = !inFence
@@ -758,7 +924,7 @@ export function demonstrativeHeadings(md: string): Violation[] {
       out.push({
         line: i + 1,
         rule: 'demonstrative-heading',
-        excerpt: line.trim().slice(0, 80),
+        excerpt: excerptAt(source[i], line.indexOf('#'), line.trimEnd().length),
         suggestion: `Heading ends on a bare "${last}" — name the thing.`,
       })
     }

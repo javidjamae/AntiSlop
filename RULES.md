@@ -120,6 +120,23 @@ Notes the corpus produced:
   and read the discourse marker `; that is,` as a reassertion. The right side
   stays a copula or auxiliary: matching a bare lexical verb (`The cache
   doesn't expire. It leaks.`) swallows ordinary two-sentence prose.
+  One action negated and another reported is the same shape as `do not
+  need`, and is left out:
+  `The inspector is not glancing at shingles. They are checking drains.`
+  It takes all three: an `-ing` verb on the left followed by a verb's
+  complement (a determiner, preposition, pronoun or `-ly` adverb), a
+  progressive verb on the right, and `they`/`these`/`those` as the subject.
+  With `it`/`this`/`that` the `-ing` phrase is an identity claim and still
+  reports, as do an `-ing` word in front of a noun and an `-ing` word ending
+  its clause:
+  `Success isn't getting more traffic. It's getting the right traffic.`
+  `These aren't marketing tactics. They're marketing systems.`
+  `The problem is not pricing. It is positioning.`
+  Known cost: an action-to-action flourish with a determiner is left out
+  with the rest: `Buyers aren't buying a tool. They're buying an outcome.`
+  On the corpus the exclusion moved no finding in either direction (an
+  earlier draft, with a looser left-hand check, lost one line from the AI
+  half: "Flash and HTML5 are not directly competing technologies").
   Net against the previous rule set: three shapes gained, and the target-register
   rate is 0.35 per 1,000 (see the table above).
 
