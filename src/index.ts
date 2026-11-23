@@ -891,6 +891,7 @@ const NOT_A_NOUN = new Set(
     and or but if because unless while although though since until as
     of to in on at by for with from into onto about over under up down out off away back through after before between against without within
     all any each every some many much more most few less least other another such both either neither said
+    everyone everybody everything someone somebody something anyone anybody anything nobody nothing people children men women folks
   `)
 )
 
@@ -899,7 +900,7 @@ const KIND_WORDS = new Set(words('kind kinds sort sorts type types'))
 // After "that" + word, an object or a particle means "that" opened a relative
 // clause on a verb ("minutes that cover most pipelines", "files that show up").
 const OPENS_OBJECT = new Set(
-  words('a an the its their your our his her my this these those most many some all every each any no one up out down off')
+  words('a an the its their your our his her my this these those most many some all every each any no one them you us it me him up out down off')
 )
 
 // A bare demonstrative as an object ("set these up", "if you've tried this,")
@@ -938,17 +939,25 @@ const CLAUSE_AFTER_THAT = new Set(
   words(`
     won lost broke went ran took grew came became made got gave kept left met paid put sold sent set spent stood told thought wrote
     began brought built bought caught chose drove fell felt fought found held hit hurt knew led meant read rose saw shut sat slept
-    spoke stuck struck swore taught threw understood woke wore best better worst first last usually
+    spoke stuck struck swore taught threw understood woke wore cost come best better worst first last usually
   `)
 )
 
 const WORD = /[A-Za-z][A-Za-z0-9'-]*/g
 
 /** A word reduced far enough that "command" and "commands" compare equal. */
-const stem = (w: string) =>
-  bareWord(w)
-    .replace(/(?<=(?:s|x|z|ch|sh))es$/, '')
-    .replace(/(?<!s)s$/, '')
+/** The forms a word may have in the singular, so "policies" meets "policy",
+ * "shelves" meets "shelf" and "processes" meets "process". Matching too
+ * many forms only ever leaves a finding out. */
+function forms(w: string): string[] {
+  const b = bareWord(w)
+  const out = [b]
+  if (b.endsWith('s')) out.push(b.slice(0, -1))
+  if (b.endsWith('es')) out.push(b.slice(0, -2))
+  if (b.endsWith('ies')) out.push(b.slice(0, -3) + 'y')
+  if (b.endsWith('ves')) out.push(b.slice(0, -3) + 'f', b.slice(0, -3) + 'fe')
+  return out
+}
 
 /** Lowercase, without a trailing possessive or hyphen: "File's" is "file". */
 function bareWord(w: string): string {
@@ -969,7 +978,7 @@ interface Word {
 }
 
 /** The span of the first demonstrative in `sentence` that points at nothing
- * the prose has named, or null. `named` holds the stems of every prose word
+ * the prose has named, or null. `named` holds the forms of every prose word
  * above the section's heading. */
 function danglingDemonstrative(sentence: string, named: Set<string>): [number, number] | null {
   const ws: Word[] = [...sentence.matchAll(WORD)].map((m) => ({
@@ -986,10 +995,15 @@ function danglingDemonstrative(sentence: string, named: Set<string>): [number, n
   // Something the sentence goes on to spell out: "do this: open the file".
   // Only a colon before a space or the end, so a URL or a time is not one.
   const colon = /:(?=\s|$)/.exec(sentence)?.index ?? -1
+  // Forms of the words this sentence has used before the current one.
+  const seen = new Set<string>()
   for (let k = 0; k < ws.length; k++) {
     const w = ws[k]
     if (w.start > boundary) break
+    if (k > 0) for (const f of forms(ws[k - 1].text)) seen.add(f)
     if (!['this', 'that', 'these', 'those'].includes(w.lower)) continue
+    // "that's missing" is "that is", not a determiner.
+    if (/'s$/i.test(w.text)) continue
     if (colon > w.end) continue
     const prev = k > 0 ? ws[k - 1].lower : ''
     if (w.lower === 'that' && COMPLEMENTIZER_BEFORE.has(prev)) continue
@@ -1018,8 +1032,7 @@ function danglingDemonstrative(sentence: string, named: Set<string>): [number, n
         if (/^[A-Z0-9]/.test(next.text)) continue
         if (tight(next, ws[k + 2]) && OPENS_OBJECT.has(ws[k + 2].lower)) continue
       }
-      const s = stem(noun.lower)
-      if (named.has(s) || ws.slice(0, k).some((p) => stem(p.lower) === s)) continue
+      if (forms(noun.text).some((f) => named.has(f) || seen.has(f))) continue
       return [w.start, noun.end]
     }
     // "set these up", "if you've tried this,": a bare demonstrative as an object.
@@ -1032,6 +1045,9 @@ function danglingDemonstrative(sentence: string, named: Set<string>): [number, n
 }
 
 const BLOCK_START = /^(\||-|\*|\+|\d+\.|>|```|~~~)/
+// What a one-sentence paragraph can introduce: a list, a table, code, or a
+// line that is all bold, a label over a run of examples ("**Resize:**").
+const INTRODUCED_BLOCK = /^([-*+]\s|\d+\.\s|\||```|~~~|\*\*[^*]+\*\*$)/
 
 export function headingDependentOpeners(md: string): Violation[] {
   const out: Violation[] = []
@@ -1046,7 +1062,7 @@ export function headingDependentOpeners(md: string): Violation[] {
   const named = new Set<string>()
   // A leading front-matter block is metadata (a title is a heading too).
   let start = 0
-  if (lines[0]?.trim() === '---') {
+  if (lines[0]?.trim() === '---' && /^[A-Za-z_][\w-]*\s*:/.test(lines[1] ?? '')) {
     const close = lines.findIndex((l, n) => n > 0 && /^(---|\.\.\.)\s*$/.test(l))
     if (close > 0) start = close + 1
   }
@@ -1054,14 +1070,16 @@ export function headingDependentOpeners(md: string): Violation[] {
   let fence: string | null = null
   for (let i = start; i < lines.length; i++) {
     const f = /^\s*(`{3,}|~{3,})/.exec(lines[i])
-    if (f && (fence === null || (f[1][0] === fence[0] && f[1].length >= fence.length && !lines[i].trim().slice(f[1].length).trim()))) {
+    // A backtick line with another backtick after the opener is inline code.
+    const inline = f && f[1][0] === '`' && lines[i].trim().slice(f[1].length).includes('`')
+    if (f && !(fence === null && inline) && (fence === null || (f[1][0] === fence[0] && f[1].length >= fence.length && !lines[i].trim().slice(f[1].length).trim()))) {
       fence = fence === null ? f[1] : null
       continue
     }
     if (fence !== null) continue
     const h = lines[i].match(/^#{2,6}\s+(.+)/)
     if (!h) {
-      if (!/^#\s/.test(lines[i])) for (const m of maskProse(lines[i]).matchAll(WORD)) named.add(stem(m[0]))
+      if (!/^#\s/.test(lines[i])) for (const m of maskProse(lines[i]).matchAll(WORD)) for (const f of forms(m[0])) named.add(f)
       continue
     }
     const heading = h[1].trim()
@@ -1096,8 +1114,9 @@ export function headingDependentOpeners(md: string): Violation[] {
       const sentence = prose.slice(0, ends[0] ?? prose.length)
       // A one-sentence paragraph over a list, table or code block introduces
       // it: "try these prompts" points at the prompts below.
-      const afterPara = lines.slice(j + starts.length).find((l) => l.trim())?.trim() ?? ''
-      if (ends.length <= 1 && BLOCK_START.test(afterPara)) break
+      let after = j + starts.length
+      while (after < lines.length && !lines[after].trim()) after++
+      if (ends.length <= 1 && INTRODUCED_BLOCK.test(lines[after]?.trim() ?? '')) break
       const span = danglingDemonstrative(sentence, named)
       if (span) {
         let r = 0

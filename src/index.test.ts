@@ -171,6 +171,40 @@ test('heading-dependent openers: review round 1 cases', () => {
   clean('````md\n```\n## The check\n\nThis is where it runs.\n````\n')
 })
 
+test('heading-dependent openers: review round 2 cases', () => {
+  const clean = (md: string) => assert.deepEqual(headingDependentOpeners(md), [], md)
+  const fires = (md: string) => assert.equal(headingDependentOpeners(md).length, 1, md)
+  // "that's" is "that is".
+  clean('## Heading here\n\nThe piece that\'s missing is tracking.\n')
+  clean('## Heading here\n\nMost owners pick the setting that\u2019s easy to miss.\n')
+  // A relative "that" before a subject pronoun, an indefinite or a verb with a pronoun object.
+  clean('## Heading here\n\nMost owners pick the setting that everyone misses.\n')
+  clean('## Heading here\n\nIt ships the one feature that people use daily.\n')
+  clean('## Heading here\n\nThe panel shows a chart that someone built.\n')
+  clean('## Heading here\n\nOwners avoid the mistake that cost them sales.\n')
+  clean('## Heading here\n\nThe data that come in are messy.\n')
+  // -ies and -ves plurals meet their singular.
+  clean('The policies are strict.\n\n## Edits\n\nYou can edit this policy later.\n')
+  clean('The shelves are full.\n\n## Space\n\nYou can clear this shelf later.\n')
+  // A thematic break first is not front matter, and inline triple backticks are not a fence.
+  assert.equal(headingDependentOpeners('---\n\n## A\n\nThis is where it runs.\n\n---\n\nMore.\n').length, 1)
+  assert.equal(headingDependentOpeners('```js``` is inline.\n\n## A\n\nThis is where it runs.\n').length, 1)
+  // Only a list, a table or code is introduced by the sentence above it.
+  fires('## Heading here\n\nTry this.\n\n**Note:** it is slow.\n')
+  clean('## Examples\n\nOpen the assistant and try these.\n\n**Convert a video:**\n\nType the request.\n')
+  fires('## Heading here\n\nYou can skip that step.\n\n---\n\nMore.\n')
+})
+
+test('heading-dependent openers: many headings and many demonstratives stay fast', () => {
+  let t = Date.now()
+  headingDependentOpeners('## H\n\nPlain text here.\n'.repeat(20000))
+  assert.ok(Date.now() - t < 2000, `many headings: ${Date.now() - t} ms`)
+  const ws = Array.from({ length: 4000 }, (_, i) => `w${'abcdefghij'[i % 10]}x${i}`)
+  t = Date.now()
+  headingDependentOpeners('## A\n\n' + ws.join(' ') + ' ' + ws.slice().reverse().map((w) => `this ${w}`).join(' ') + '.\n')
+  assert.ok(Date.now() - t < 2000, `many demonstratives: ${Date.now() - t} ms`)
+})
+
 test('heading-dependent openers: a long first clause stays linear', () => {
   const md = '## A\n\n' + 'word '.repeat(40000) + 'this part.\n'
   const t = Date.now()
