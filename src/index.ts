@@ -927,13 +927,33 @@ const COMPLEMENTIZER_BEFORE = new Set(
     say says said show shows showed shown mean means meant think thinks thought know knows knew find finds found
     suggest suggests suggested note notes noted ensure ensures ensured believe believes assume assumes argue argues claim claims
     report reports reported prove proves proved realize realizes realized sure clear true likely possible
+    check verify confirm remember notice see expect hope understand learn tell make doubt guarantee hear read
+    fact idea chance sign news evidence proof belief hope risk odds
+  `)
+)
+
+// After a singular noun, "that" followed by one of these opens a relative
+// clause: "the version that won", "the plan that best fits".
+const CLAUSE_AFTER_THAT = new Set(
+  words(`
+    won lost broke went ran took grew came became made got gave kept left met paid put sold sent set spent stood told thought wrote
+    began brought built bought caught chose drove fell felt fought found held hit hurt knew led meant read rose saw shut sat slept
+    spoke stuck struck swore taught threw understood woke wore best better worst first last usually
   `)
 )
 
 const WORD = /[A-Za-z][A-Za-z0-9'-]*/g
 
 /** A word reduced far enough that "command" and "commands" compare equal. */
-const stem = (w: string) => w.toLowerCase().replace(/[-']+$/, '').replace(/(?:es|s)$/, '')
+const stem = (w: string) =>
+  bareWord(w)
+    .replace(/(?<=(?:s|x|z|ch|sh))es$/, '')
+    .replace(/(?<!s)s$/, '')
+
+/** Lowercase, without a trailing possessive or hyphen: "File's" is "file". */
+function bareWord(w: string): string {
+  return w.toLowerCase().replace(/'s$/, '').replace(/[-']+$/, '')
+}
 
 /** Prose with code spans and link targets blanked so their words are not read
  * as prose. Same length as the original, so indexes map straight back. */
@@ -954,20 +974,23 @@ interface Word {
 function danglingDemonstrative(sentence: string, named: Set<string>): [number, number] | null {
   const ws: Word[] = [...sentence.matchAll(WORD)].map((m) => ({
     text: m[0],
-    lower: m[0].toLowerCase().replace(/[-']+$/, ''),
+    lower: bareWord(m[0]),
     start: m.index!,
     end: m.index! + m[0].length,
   }))
   const tight = (a: Word, b: Word | undefined) => !!b && /^\s+$/.test(sentence.slice(a.end, b.start))
+  // Only the first clause: past a comma, a bracket or a dash, the sentence has named things of its own for the demonstrative to point
+  // at ("records metrics, and provides a UI for browsing that data"). A comma
+  // inside a number ("1,000") is not a boundary.
+  const boundary = /(?<!\d),|,(?!\d)|[;(\u2013\u2014]/.exec(sentence)?.index ?? sentence.length
+  // Something the sentence goes on to spell out: "do this: open the file".
+  // Only a colon before a space or the end, so a URL or a time is not one.
+  const colon = /:(?=\s|$)/.exec(sentence)?.index ?? -1
   for (let k = 0; k < ws.length; k++) {
     const w = ws[k]
-    // Only the first clause: past a comma or a bracket, the sentence has
-    // named things of its own for the demonstrative to point at ("records
-    // metrics, and provides a UI for browsing that data").
-    if (/[,;(\u2013\u2014]/.test(sentence.slice(0, w.start))) break
+    if (w.start > boundary) break
     if (!['this', 'that', 'these', 'those'].includes(w.lower)) continue
-    // Something the sentence goes on to spell out: "do this: open the file".
-    if (sentence.slice(w.end).includes(':')) continue
+    if (colon > w.end) continue
     const prev = k > 0 ? ws[k - 1].lower : ''
     if (w.lower === 'that' && COMPLEMENTIZER_BEFORE.has(prev)) continue
     // "all of that", "all those": a summary of what the sections above said.
@@ -982,15 +1005,17 @@ function danglingDemonstrative(sentence: string, named: Set<string>): [number, n
       if (w.lower === 'these' || w.lower === 'those' || KIND_WORDS.has(next.lower)) continue
       const noun = next
       if (DEICTIC_NOUNS.has(noun.lower)) continue
+      // Past the first word, a word that reads as a verb ("and this makes",
+      // "that matters", "that changed") or an adverb ("that really") makes
+      // the demonstrative a pronoun or a relative, not a determiner.
+      if (k > 0 && (/(?:[^s]s|ed|ly)$/.test(next.lower) || CLAUSE_AFTER_THAT.has(next.lower))) continue
       if (w.lower === 'that') {
         // After a plural noun or a verb, "that" opens a clause ("functions
         // that verify", "indicates that", "mentioned that"). After "that", a
-        // capitalized word, a number, or a word that reads as a verb or an
-        // adverb ("that matters", "that changed", "that really") starts a
-        // clause, and so does a verb with its object after it.
+        // capitalized word or a number starts a clause, and so does a verb
+        // with its object after it ("files that cover most cases").
         if (/(?:[^s]s|ed)$/.test(prev)) continue
         if (/^[A-Z0-9]/.test(next.text)) continue
-        if (/(?:[^s]s|ed|ing|ly)$/.test(next.lower)) continue
         if (tight(next, ws[k + 2]) && OPENS_OBJECT.has(ws[k + 2].lower)) continue
       }
       const s = stem(noun.lower)
@@ -1006,7 +1031,7 @@ function danglingDemonstrative(sentence: string, named: Set<string>): [number, n
   return null
 }
 
-const BLOCK_START = /^(\||-|\*|\+|\d+\.|>|```)/
+const BLOCK_START = /^(\||-|\*|\+|\d+\.|>|```|~~~)/
 
 export function headingDependentOpeners(md: string): Violation[] {
   const out: Violation[] = []
@@ -1019,13 +1044,21 @@ export function headingDependentOpeners(md: string): Violation[] {
   // Stems of the prose words read so far, headings and code left out: what a
   // reader has been told once the headings are deleted.
   const named = new Set<string>()
-  let inFence = false
-  for (let i = 0; i < lines.length; i++) {
-    if (/^\s*```/.test(lines[i])) {
-      inFence = !inFence
+  // A leading front-matter block is metadata (a title is a heading too).
+  let start = 0
+  if (lines[0]?.trim() === '---') {
+    const close = lines.findIndex((l, n) => n > 0 && /^(---|\.\.\.)\s*$/.test(l))
+    if (close > 0) start = close + 1
+  }
+  // The open fence ("```" or "~~~", and its length), or null outside one.
+  let fence: string | null = null
+  for (let i = start; i < lines.length; i++) {
+    const f = /^\s*(`{3,}|~{3,})/.exec(lines[i])
+    if (f && (fence === null || (f[1][0] === fence[0] && f[1].length >= fence.length && !lines[i].trim().slice(f[1].length).trim()))) {
+      fence = fence === null ? f[1] : null
       continue
     }
-    if (inFence) continue
+    if (fence !== null) continue
     const h = lines[i].match(/^#{2,6}\s+(.+)/)
     if (!h) {
       if (!/^#\s/.test(lines[i])) for (const m of maskProse(lines[i]).matchAll(WORD)) named.add(stem(m[0]))

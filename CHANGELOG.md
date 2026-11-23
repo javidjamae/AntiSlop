@@ -20,8 +20,9 @@ all from one commit. The tag is the version consumers pin.
   document (`this year`, `this guide`), a colon or a list the sentence
   introduces, `that` opening a clause (`functions that verify`, `shows
   that`), and anything past the first comma. A wrapped first sentence is
-  read across its line breaks, and a heading inside a code fence is no
-  longer read as one. On the human corpus the rule's rate went from 0.19
+  read across its line breaks. A heading inside a code fence (backtick or
+  tilde) is no longer read as one, and a front-matter title does not count
+  as prose that named something. On the human corpus the rule's rate went from 0.19
   to 0.30 findings per 1,000 target lines.
 
 ## 0.6.1 (2026-11-12)

@@ -75,7 +75,7 @@ matching English rather than machine authorship, and belongs off by default.
 | `banned phrase` | 0.82 | 0.51 | always | Concentrated in a few entries; the report names them |
 | `contrast-slop` | 0.35 | 0.41 | off | Tightened against this corpus; see below |
 | `inline-header-bullet` | 0.33 | 0.00 | off | A real pattern in edited human docs, which is why it is STRICT-only |
-| `heading-dependent-opener` | 0.30 | 0.00 | on | Rose from 0.19 once the rule read past the first word. Of the four new hits, three point at their heading (`this protection` under a heading naming the protection) and one at the previous chapter |
+| `heading-dependent-opener` | 0.30 | 0.00 | on | Rose from 0.19 once the rule read past the first word. Of the five new hits, four point at their heading (`Include this polyfill` under `## Polyfill`) and one at the previous chapter |
 | `arrow-symbol` | 0.21 | 0.00 | on | Residual: multi-word pipeline stages defeat the capitalized-token exemption |
 | `banned opener` | 0.21 | 0.00 | on | Rose from 0.02 once apostrophe straightening let `Here’s why` match |
 | `bold-overuse` | 0.05 | 0.00 | on | |

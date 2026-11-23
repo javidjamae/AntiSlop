@@ -139,6 +139,45 @@ test('heading-dependent openers: what a mid-sentence demonstrative may point at'
   clean('## Docs\n\nRead [the reference](https://example.com/this-part) first.\n')
 })
 
+test('heading-dependent openers: review round 1 cases', () => {
+  const clean = (md: string) => assert.deepEqual(headingDependentOpeners(md), [], md)
+  const fires = (md: string) => assert.equal(headingDependentOpeners(md).length, 1, md)
+  // A plural named above matches its singular, -e and -ss nouns included.
+  clean('The rules below each catch one tell.\n\n## Tuning\n\nYou can turn this rule off in the config.\n')
+  clean('Upload the files first.\n\n## Size\n\nYou can compress this file later.\n')
+  clean('Both processes run at night.\n\n## Timing\n\nYou can move this process to the morning.\n')
+  clean('One process runs at night.\n\n## Timing\n\nYou can move these processes to the morning.\n')
+  // A possessive matches the noun named above.
+  clean('The file is big.\n\n## Size\n\nThis file\'s size is fine.\n')
+  fires('## Size\n\nThis file\'s size is fine.\n')
+  // "that" opening a clause after a base-form verb or a clause-taking noun.
+  clean('## Scheduling\n\nVerify that cron runs the job hourly.\n')
+  clean('## Results\n\nConfirm that traffic grew in March.\n')
+  clean('## Ranking\n\nThe fact that search engines rank fresh pages higher is old news.\n')
+  // A relative "that" before an irregular past or an adverb.
+  clean('## Results\n\nWe kept the version that won.\n')
+  clean('## Plans\n\nPick the plan that best fits your team.\n')
+  // "this" after a joining word points into its own sentence.
+  clean('## Caching\n\nThe cache warms up and this makes every request faster.\n')
+  // An -ing noun after "that" is still a noun.
+  fires('## Settings\n\nYou can change that setting later.\n')
+  // A comma inside a number, a URL or a time do not end the check.
+  fires('## Setup\n\nAbout 1,000 owners skip that step.\n')
+  fires('## Setup\n\nYou can skip that step at https://example.com today.\n')
+  // A title in front matter is a heading too: it names nothing for the prose.
+  fires('---\ntitle: Skip the step\n---\n\n## Setup\n\nYou can skip that step if you like.\n')
+  // "~~~" fences, like backtick fences, hold no headings.
+  clean('~~~md\n## The check\n\nThis is where it runs.\n~~~\n')
+  clean('````md\n```\n## The check\n\nThis is where it runs.\n````\n')
+})
+
+test('heading-dependent openers: a long first clause stays linear', () => {
+  const md = '## A\n\n' + 'word '.repeat(40000) + 'this part.\n'
+  const t = Date.now()
+  assert.equal(headingDependentOpeners(md).length, 1)
+  assert.ok(Date.now() - t < 2000, `${Date.now() - t} ms`)
+})
+
 test('heading-dependent openers: a wrapped first sentence is read whole and reported on its own line', () => {
   const md = '## The citation check\n\nMost teams run the check once a quarter, though you can skip that\nstep if an assistant already names you every week.\n'
   // The first clause ends at the comma, so this one is left alone...
