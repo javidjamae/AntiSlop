@@ -6,6 +6,7 @@
   "license": "MIT",
   "repository": "github:highbeampub/AntiSlop",
   "homepage": "https://github.com/highbeampub/AntiSlop#readme",
+  "bugs": "https://github.com/highbeampub/AntiSlop/issues",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
