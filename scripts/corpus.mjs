@@ -37,7 +37,7 @@ const CACHE = join(CORPUS, 'cache')
 const MANIFEST = JSON.parse(readFileSync(join(CORPUS, 'manifest.json'), 'utf8'))
 const LOCK_PATH = join(CORPUS, 'corpus.lock.json')
 
-const UA = { 'user-agent': 'antislop-corpus-harness (+https://github.com/javidjamae/AntiSlop)' }
+const UA = { 'user-agent': 'antislop-corpus-harness (+https://github.com/highbeampub/AntiSlop)' }
 const GH = process.env.GITHUB_TOKEN ? { ...UA, authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : UA
 
 /**
@@ -486,7 +486,7 @@ footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);colo
 </style>
 </head><body><main>
 ${out.join('\n')}
-<footer>Generated ${generated} from <a href="https://github.com/javidjamae/AntiSlop">javidjamae/AntiSlop</a>. Reproduce with <code>npm run corpus</code>.</footer>
+<footer>Generated ${generated} from <a href="https://github.com/highbeampub/AntiSlop">highbeampub/AntiSlop</a>. Reproduce with <code>npm run corpus</code>.</footer>
 </main></body></html>
 `
 }

@@ -106,5 +106,5 @@ Pushing the tag triggers .github/workflows/release.yml, which builds the
 package and attaches the tarball to a GitHub Release. Consumers who cannot
 run install scripts should install that asset rather than the repository:
 
-  "antislop": "https://github.com/javidjamae/AntiSlop/releases/download/v${next}/antislop-${next}.tgz"
+  "antislop": "https://github.com/highbeampub/AntiSlop/releases/download/v${next}/antislop-${next}.tgz"
 `)

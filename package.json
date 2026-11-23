@@ -4,7 +4,9 @@
   "description": "A deterministic linter for the mechanical tells of AI-generated prose.",
   "type": "module",
   "license": "MIT",
-  "repository": "github:javidjamae/AntiSlop",
+  "repository": "github:highbeampub/AntiSlop",
+  "homepage": "https://github.com/highbeampub/AntiSlop#readme",
+  "bugs": "https://github.com/highbeampub/AntiSlop/issues",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

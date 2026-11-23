@@ -1,12 +1,14 @@
 # AntiSlop
 
-[![ci](https://github.com/javidjamae/AntiSlop/actions/workflows/ci.yml/badge.svg)](https://github.com/javidjamae/AntiSlop/actions/workflows/ci.yml)
-[![release](https://img.shields.io/github/v/tag/javidjamae/AntiSlop?label=release)](https://github.com/javidjamae/AntiSlop/tags)
-[![last commit](https://img.shields.io/github/last-commit/javidjamae/AntiSlop)](https://github.com/javidjamae/AntiSlop/commits/main)
-[![license](https://img.shields.io/github/license/javidjamae/AntiSlop)](LICENSE)
+[![ci](https://github.com/highbeampub/AntiSlop/actions/workflows/ci.yml/badge.svg)](https://github.com/highbeampub/AntiSlop/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/tag/highbeampub/AntiSlop?label=release)](https://github.com/highbeampub/AntiSlop/tags)
+[![last commit](https://img.shields.io/github/last-commit/highbeampub/AntiSlop)](https://github.com/highbeampub/AntiSlop/commits/main)
+[![license](https://img.shields.io/github/license/highbeampub/AntiSlop)](LICENSE)
 ![dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)
-[![corpus report](https://img.shields.io/badge/corpus%20report-measured-blue)](https://javidjamae.github.io/AntiSlop/)
+[![corpus report](https://img.shields.io/badge/corpus%20report-measured-blue)](https://highbeampub.github.io/AntiSlop/)
+
+Maintained by the team at [Highbeam](https://www.highbeam.pub).
 
 A humanization linter that helps you prevent writing AI slop (or human slop, for that matter).
 
@@ -14,16 +16,16 @@ AntiSlop checks prose for the mechanical tells of AI-generated writing: em-dash 
 
 This README passes its own strict lint. Run `antislop --strict README.md` to check.
 
-Every rule ships with a measured false-positive rate against 101,000 lines of human prose written before the generated web, and a detection rate against generated prose paired with it. The current numbers are at **[javidjamae.github.io/AntiSlop](https://javidjamae.github.io/AntiSlop/)**, reproducible with `npm run corpus`.
+Every rule ships with a measured false-positive rate against 101,000 lines of human prose written before the generated web, and a detection rate against generated prose paired with it. The current numbers are at **[highbeampub.github.io/AntiSlop](https://highbeampub.github.io/AntiSlop/)**, reproducible with `npm run corpus`.
 
 ## Install
 
 ```bash
 # as a project dependency (pin a tag)
-pnpm add github:javidjamae/AntiSlop#v0.6.1
+pnpm add github:highbeampub/AntiSlop#v0.6.1
 
 # or run without installing
-npx github:javidjamae/AntiSlop#v0.6.1 file.md --strict
+npx github:highbeampub/AntiSlop#v0.6.1 file.md --strict
 ```
 
 ## CLI
@@ -150,7 +152,7 @@ Precision claims are cheap, so every rule carries a number. `npm run corpus` fet
 
 The corpus measures; it does not guard. Those are different jobs and it only does the first. Five of the eighteen rules never fire on it at all, so a change to any of them is invisible to a sweep over it; it holds no configuration, so nothing about how the tool reads `antislop.config.json` is exercised; and it contains whatever encoding its authors happened to use, so a sweep can come back clean while being silent on the construct that changed. Regressions are caught by engineered fixtures in the test suite instead, which is also why they are committed and the corpus is not.
 
-Corpus content is fetched at run time and never committed. Method, sources, and the sources evaluated and rejected are in [corpus/README.md](corpus/README.md); the current report is at [javidjamae.github.io/AntiSlop](https://javidjamae.github.io/AntiSlop/) and refreshed monthly.
+Corpus content is fetched at run time and never committed. Method, sources, and the sources evaluated and rejected are in [corpus/README.md](corpus/README.md); the current report is at [highbeampub.github.io/AntiSlop](https://highbeampub.github.io/AntiSlop/) and refreshed monthly.
 
 ## Attribution
 
