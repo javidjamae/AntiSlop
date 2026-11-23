@@ -22,10 +22,10 @@ Every rule ships with a measured false-positive rate against 101,000 lines of hu
 
 ```bash
 # as a project dependency (pin a tag)
-pnpm add github:highbeampub/AntiSlop#v0.6.1
+pnpm add github:highbeampub/AntiSlop#v0.6.2
 
 # or run without installing
-npx github:highbeampub/AntiSlop#v0.6.1 file.md --strict
+npx github:highbeampub/AntiSlop#v0.6.2 file.md --strict
 ```
 
 ## CLI
