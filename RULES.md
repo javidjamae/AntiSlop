@@ -18,7 +18,7 @@
 | `inline-header-bullet` | `inlineHeaderBullets` | `- **Term:** sentence` bullet lists | off | on |
 | `emoji-decoration` | `emojiDecor` | Emoji decorating headings or bullets (©/®/™ exempt) | on | on |
 | `bold-overuse` | `boldOveruse` | 3+ bold spans in one paragraph (table rows exempt) | on | on |
-| `heading-dependent-opener` | `headingDependentOpener` | A section's first sentence opening on a bare referring word whose antecedent is the heading | on | on |
+| `heading-dependent-opener` | `headingDependentOpener` | A section's first sentence that leans on the heading: it opens on a bare referring word (`This is where it learns`), or its first clause points at something no prose has named (`Acme does this part for you`, `You can skip that step`, `set these up`) | on | on |
 | `demonstrative-heading` | `demonstrativeHeading` | Non-question H2/H3 ending on a bare "it"/"this"/"that" | on | on |
 | `reveal-shape` | `revealShape` | The tease framing: `what nobody tells you`, `the part everyone skips`, `this is the thing everyone gets wrong`, `what they never mention`. Withholds the point, sells the withholding, and casts the reader as the one getting it wrong | on | on |
 
@@ -75,16 +75,17 @@ matching English rather than machine authorship, and belongs off by default.
 | `banned phrase` | 0.82 | 0.51 | always | Concentrated in a few entries; the report names them |
 | `contrast-slop` | 0.35 | 0.41 | off | Tightened against this corpus; see below |
 | `inline-header-bullet` | 0.33 | 0.00 | off | A real pattern in edited human docs, which is why it is STRICT-only |
+| `heading-dependent-opener` | 0.30 | 0.00 | on | Rose from 0.19 once the rule read past the first word. Of the five new hits, four point at their heading (`Include this polyfill` under `## Polyfill`) and one at the previous chapter |
 | `arrow-symbol` | 0.21 | 0.00 | on | Residual: multi-word pipeline stages defeat the capitalized-token exemption |
 | `banned opener` | 0.21 | 0.00 | on | Rose from 0.02 once apostrophe straightening let `Here’s why` match |
-| `heading-dependent-opener` | 0.19 | 0.00 | on | |
 | `bold-overuse` | 0.05 | 0.00 | on | |
 | `demonstrative-heading` | 0.02 | 0.00 | on | |
 | `emoji-decoration` | 0.02 | 0.00 | on | |
 | `reveal-shape` | 0.00 | 0.00 | on | No hits in 101,410 lines |
 
-Every default-on rule sits at or below 0.21 per 1,000 lines on the target
-register. `invisible-unicode` is higher and always on, and its hits are real.
+Every default-on rule sits at or below 0.30 per 1,000 lines on the target
+register, and every one but `heading-dependent-opener` at or below 0.21.
+`invisible-unicode` is higher and always on, and its hits are real.
 
 These numbers say how often a rule fires on real writing, which is what
 justifies a default. They are not a regression check and cannot be used as one:
