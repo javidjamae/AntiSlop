@@ -77,6 +77,84 @@ test('heading-dependent openers: bare referring word under a heading', () => {
   assert.equal(headingDependentOpeners('## X vs Y\n\nBoth n8n and Make can call the API.\n').length, 0)
 })
 
+// A demonstrative later in the first sentence points back at the heading as
+// surely as one that opens it: delete the heading and "this part" means nothing.
+const MIDSENTENCE_FIRES: [string, string][] = [
+  [
+    '## Conversion tracking in the app\n\nThe app does this part for you. You tell it what counts as a conversion for your business.\n',
+    'this part',
+  ],
+  ['## The citation check\n\nYou can skip that step if an assistant already names you every week.\n', 'that step'],
+  ['## Key events\n\nMost owners never set these up, so GA4 reports sessions and nothing else.\n', 'these'],
+]
+const MIDSENTENCE_CLEAN = [
+  '## Conversion tracking in the app\n\nThe app tracks every conversion you define and ties it to its source.\n',
+  '## The AI Assistant channel\n\nThis year GA4 added a channel for AI assistants, and it needs no setup.\n',
+  '## Key events\n\nGA4 records a form sent or a tap to call as an event. That event only counts as a conversion once you mark it as a key event.\n',
+]
+
+test('heading-dependent openers: a demonstrative later in the first sentence', () => {
+  for (const [md, quoted] of MIDSENTENCE_FIRES) {
+    const found = headingDependentOpeners(md)
+    assert.equal(found.length, 1, md)
+    assert.equal(found[0].rule, 'heading-dependent-opener')
+    assert.equal(found[0].line, 3)
+    assert.ok(found[0].suggestion?.startsWith(`"${quoted}" points back at the heading`), String(found[0].suggestion))
+    assert.ok(md.split('\n')[2].includes(found[0].excerpt), found[0].excerpt)
+    assert.ok(lint(md, NEUTRAL).some((v) => v.rule === 'heading-dependent-opener'), `lint() under NEUTRAL: ${md}`)
+  }
+  for (const md of MIDSENTENCE_CLEAN) assert.deepEqual(headingDependentOpeners(md), [], md)
+})
+
+test('heading-dependent openers: what a mid-sentence demonstrative may point at', () => {
+  const clean = (md: string) => assert.deepEqual(headingDependentOpeners(md), [], md)
+  const fires = (md: string) => assert.equal(headingDependentOpeners(md).length, 1, md)
+  // A noun the prose above already used, in any form.
+  clean('Each command below runs in a second.\n\n## Running it at scale\n\nYou can run this command on a server too.\n')
+  fires('## Running it at scale\n\nYou can run this command on a server too.\n')
+  // A noun the sentence itself named before pointing at it.
+  clean('## Exports\n\nThe export writes a file, and you can schedule this export weekly.\n')
+  // Time, the document, a colon that spells it out.
+  clean('## Pricing\n\nPrices went up this spring for most plans.\n')
+  clean('## Scope\n\nYou will learn how to set up tracking in this guide.\n')
+  clean('## Setup\n\nYou only need to do this: open the settings and turn tracking on.\n')
+  clean('## Formats\n\nYou know the format already if you are reading this.\n')
+  // "these X", "those X", "all of that", "this kind of": a summary of the sections above.
+  clean('## At scale\n\nRunning these commands by hand is fine for one file.\n')
+  clean('## The hosted option\n\nThe service wraps all of that work into one call.\n')
+  clean('## Automating it\n\nA scheduler is the usual choice for this kind of job.\n')
+  // A one-sentence paragraph that introduces the list under it.
+  clean('## Example prompts\n\nOpen the assistant and try these.\n\n- Trim the first second\n- Mute the audio\n')
+  fires('## Example prompts\n\nOpen the assistant and try these. Each takes a second.\n\n- Trim the first second\n')
+  // Past the first clause, the sentence has named things of its own.
+  clean('## Limits\n\nTracking raises the chance that the first try works, but cannot guarantee this every time.\n')
+  // "that" opening a clause, not pointing.
+  clean('## Results\n\nThe test shows that traffic grew in March.\n')
+  clean('## Tests\n\nTests are functions that verify the code works.\n')
+  clean('## Tests\n\nThe marker indicates that ownership moves.\n')
+  clean('## Pods\n\nCreate a pod that sets a priority.\n')
+  clean('## Files\n\nKeep a list of files that cover most cases.\n')
+  // Code spans and link targets are not prose.
+  clean('## Flags\n\nPass `--keep this part` to the tool.\n')
+  clean('## Docs\n\nRead [the reference](https://example.com/this-part) first.\n')
+})
+
+test('heading-dependent openers: a wrapped first sentence is read whole and reported on its own line', () => {
+  const md = '## The citation check\n\nMost teams run the check once a quarter, though you can skip that\nstep if an assistant already names you every week.\n'
+  // The first clause ends at the comma, so this one is left alone...
+  assert.deepEqual(headingDependentOpeners(md), [])
+  // ...and a wrapped first clause is read across the line break.
+  const wrapped = '## The citation check\n\nYou can skip that\nstep if an assistant already names you every week.\n'
+  const [v] = headingDependentOpeners(wrapped)
+  assert.equal(v?.line, 3)
+  assert.ok(wrapped.split('\n')[2].includes(v.excerpt), v.excerpt)
+})
+
+test('heading-dependent openers: smart quotes, and headings inside code fences', () => {
+  assert.equal(headingDependentOpeners('## Why it breaks\n\nIf you\u2019ve tried this, you know.\n').length, 1)
+  assert.deepEqual(headingDependentOpeners('```md\n## The check\n\nThis is where it runs.\n```\n'), [])
+})
+
 test('invisible unicode: zero-width, soft hyphen, NNBSP, tag block — under every profile', () => {
   const hit = (s: string) => lint(s, NEUTRAL).filter((v) => v.rule === 'invisible-unicode')
   assert.equal(hit('war​plan').length, 1)

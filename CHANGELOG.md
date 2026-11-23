@@ -6,7 +6,23 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
-_Nothing yet._
+### Fixed
+
+- `heading-dependent-opener` reads the whole first clause of a section's
+  first sentence. It read only the first word, so `Acme does this part for you.`
+  under `## Conversion tracking in Acme` passed, because the sentence opens
+  on `Acme`; delete the heading and `this part` points at nothing. The rule
+  now also fires on `this`/`that` in front of a noun no prose has named
+  (`You can skip that step`), and on a bare `this` or `these` used as an
+  object (`Most owners never set these up`). It leaves alone a noun the
+  prose above or the sentence itself already used, `these`/`those` on a
+  noun and `all of that` (which sum up the sections above), time and the
+  document (`this year`, `this guide`), a colon or a list the sentence
+  introduces, `that` opening a clause (`functions that verify`, `shows
+  that`), and anything past the first comma. A wrapped first sentence is
+  read across its line breaks, and a heading inside a code fence is no
+  longer read as one. On the human corpus the rule's rate went from 0.19
+  to 0.30 findings per 1,000 target lines.
 
 ## 0.6.1 (2026-11-12)
 

@@ -854,14 +854,159 @@ function excerptAt(line: string, start: number, end: number, ends: number[] = se
   return line.slice(ws, we)
 }
 
-// A heading is a SUMMARY of its section: the prose never builds off it. This
-// catches the mechanically detectable failure — a section whose FIRST sentence
-// opens with a bare referring word whose antecedent can only be the heading.
-// Precision beats recall: a referring word that re-names its subject in the
-// same breath ("Both methods produce...") is connected prose and left alone.
+// A heading is a SUMMARY of its section: the prose never builds off it. Delete
+// every heading and the body must still read as complete prose. This catches
+// the mechanically detectable failures, in the section's FIRST sentence only:
+//
+// 1. The sentence opens on a bare referring word ("This is where it learns.").
+// 2. Anywhere in it, a demonstrative points back at something no prose has
+//    named: "this part", "that step", or a bare "these" as an object ("set
+//    these up"). With the headings deleted, nothing is left for it to mean.
+//
+// Precision beats recall. Left alone: a referring word that re-names its
+// subject in the same breath ("Both methods produce..."); a demonstrative on
+// a noun the prose already used, in this sentence or anywhere above the
+// heading; "these" or "those" on a noun, and "all of that", which sum up the
+// sections above ("these commands" after a section of commands); one past the
+// first clause, where the sentence has named things of its own; one that
+// points at time ("this year") or at the document ("this guide", "reading
+// this"); and one that points forward, to a colon or to the list or code
+// block the sentence introduces ("try these prompts" over a list of prompts).
 const REFERRING = `it|it's|this|these|those|that|they|both|neither|such`
 const BARE_VERB = `is|isn't|are|aren't|was|were|will|would|can|can't|could|should|shall|do|does|did|has|have|had|may|might|must|'s|'re`
 const REFERRING_OPENER = new RegExp(`^(${REFERRING})(\\s+(${BARE_VERB})\\b|\\s*[.,;:!?])`, 'i')
+
+const words = (s: string) => s.split(/\s+/).filter(Boolean)
+
+// Words that cannot be the noun of "this X": after one of these the
+// demonstrative is a pronoun, a conjunction or a relative ("that you", "that
+// is"), never a determiner.
+const NOT_A_NOUN = new Set(
+  words(`
+    a an the this that these those it its it's they them their theirs he him his she her hers we us our ours you your yours i me my mine
+    who whom whose which what when where why how there here
+    is isn't are aren't was wasn't were weren't be been being am do does did doesn't don't didn't has have had hasn't haven't
+    will won't would wouldn't can can't cannot could couldn't should shouldn't shall may might must
+    not no nor never also only just even still really very too so then than now already always often enough
+    and or but if because unless while although though since until as
+    of to in on at by for with from into onto about over under up down out off away back through after before between against without within
+    all any each every some many much more most few less least other another such both either neither said
+  `)
+)
+
+const KIND_WORDS = new Set(words('kind kinds sort sorts type types'))
+
+// After "that" + word, an object or a particle means "that" opened a relative
+// clause on a verb ("minutes that cover most pipelines", "files that show up").
+const OPENS_OBJECT = new Set(
+  words('a an the its their your our his her my this these those most many some all every each any no one up out down off')
+)
+
+// A bare demonstrative as an object ("set these up", "if you've tried this,")
+// closes on one of these words or on punctuation. Only `this` and `these`:
+// bare `that` is a relative or a conjunction as often as a pronoun, and bare
+// `those` is almost always generic ("those who", "those of you").
+const BARE_OBJECT_FOLLOW = new Set(
+  words('up down out off away back over in on at by for to with into about from and or but so because if when unless before after')
+)
+
+// "this year", "these days": a demonstrative that points at time, not at an
+// earlier noun. "this guide", "this post": one that points at the document.
+const DEICTIC_NOUNS = new Set(
+  words(`
+    year years month months week weeks day days morning afternoon evening night tonight weekend weekends quarter season
+    spring summer fall autumn winter time times moment decade century point space
+    post posts article articles guide guides page pages piece tutorial chapter section book essay video episode series site website newsletter
+  `)
+)
+
+// "that" in front of a clause, not a noun: "shows that", "so that".
+const COMPLEMENTIZER_BEFORE = new Set(
+  words(`
+    so now given such except provided in
+    say says said show shows showed shown mean means meant think thinks thought know knows knew find finds found
+    suggest suggests suggested note notes noted ensure ensures ensured believe believes assume assumes argue argues claim claims
+    report reports reported prove proves proved realize realizes realized sure clear true likely possible
+  `)
+)
+
+const WORD = /[A-Za-z][A-Za-z0-9'-]*/g
+
+/** A word reduced far enough that "command" and "commands" compare equal. */
+const stem = (w: string) => w.toLowerCase().replace(/[-']+$/, '').replace(/(?:es|s)$/, '')
+
+/** Prose with code spans and link targets blanked so their words are not read
+ * as prose. Same length as the original, so indexes map straight back. */
+function maskProse(line: string): string {
+  return line.replace(/`[^`]*`/g, (m) => ' '.repeat(m.length)).replace(/\]\([^)]*\)/g, (m) => ']' + ' '.repeat(m.length - 1))
+}
+
+interface Word {
+  text: string
+  lower: string
+  start: number
+  end: number
+}
+
+/** The span of the first demonstrative in `sentence` that points at nothing
+ * the prose has named, or null. `named` holds the stems of every prose word
+ * above the section's heading. */
+function danglingDemonstrative(sentence: string, named: Set<string>): [number, number] | null {
+  const ws: Word[] = [...sentence.matchAll(WORD)].map((m) => ({
+    text: m[0],
+    lower: m[0].toLowerCase().replace(/[-']+$/, ''),
+    start: m.index!,
+    end: m.index! + m[0].length,
+  }))
+  const tight = (a: Word, b: Word | undefined) => !!b && /^\s+$/.test(sentence.slice(a.end, b.start))
+  for (let k = 0; k < ws.length; k++) {
+    const w = ws[k]
+    // Only the first clause: past a comma or a bracket, the sentence has
+    // named things of its own for the demonstrative to point at ("records
+    // metrics, and provides a UI for browsing that data").
+    if (/[,;(\u2013\u2014]/.test(sentence.slice(0, w.start))) break
+    if (!['this', 'that', 'these', 'those'].includes(w.lower)) continue
+    // Something the sentence goes on to spell out: "do this: open the file".
+    if (sentence.slice(w.end).includes(':')) continue
+    const prev = k > 0 ? ws[k - 1].lower : ''
+    if (w.lower === 'that' && COMPLEMENTIZER_BEFORE.has(prev)) continue
+    // "all of that", "all those": a summary of what the sections above said.
+    if (prev === 'all' || (prev === 'of' && ws[k - 2]?.lower === 'all')) continue
+    const next = ws[k + 1]
+
+    // "this part", "that step": a determiner on a noun the prose never named.
+    if (tight(w, next) && !NOT_A_NOUN.has(next.lower)) {
+      // "these commands", "those five examples", "this kind of setup": a
+      // summary of the sections above, which shows them in code and lists
+      // more often than it names them in a sentence.
+      if (w.lower === 'these' || w.lower === 'those' || KIND_WORDS.has(next.lower)) continue
+      const noun = next
+      if (DEICTIC_NOUNS.has(noun.lower)) continue
+      if (w.lower === 'that') {
+        // After a plural noun or a verb, "that" opens a clause ("functions
+        // that verify", "indicates that", "mentioned that"). After "that", a
+        // capitalized word, a number, or a word that reads as a verb or an
+        // adverb ("that matters", "that changed", "that really") starts a
+        // clause, and so does a verb with its object after it.
+        if (/(?:[^s]s|ed)$/.test(prev)) continue
+        if (/^[A-Z0-9]/.test(next.text)) continue
+        if (/(?:[^s]s|ed|ing|ly)$/.test(next.lower)) continue
+        if (tight(next, ws[k + 2]) && OPENS_OBJECT.has(ws[k + 2].lower)) continue
+      }
+      const s = stem(noun.lower)
+      if (named.has(s) || ws.slice(0, k).some((p) => stem(p.lower) === s)) continue
+      return [w.start, noun.end]
+    }
+    // "set these up", "if you've tried this,": a bare demonstrative as an object.
+    if (k === 0 || !(w.lower === 'this' || w.lower === 'these')) continue
+    if (prev === 'reading') continue
+    const closes = !next || /[.,;!?]/.test(sentence.slice(w.end, next.start)) || (tight(w, next) && BARE_OBJECT_FOLLOW.has(next.lower))
+    if (closes) return [w.start, w.end]
+  }
+  return null
+}
+
+const BLOCK_START = /^(\||-|\*|\+|\d+\.|>|```)/
 
 export function headingDependentOpeners(md: string): Violation[] {
   const out: Violation[] = []
@@ -871,21 +1016,66 @@ export function headingDependentOpeners(md: string): Violation[] {
   // index-preserving, so the line numbers below stay correct.
   const lines = normalizeEol(stripBom(straighten(md))).split('\n')
   const source = normalizeEol(stripBom(md)).split('\n')
+  // Stems of the prose words read so far, headings and code left out: what a
+  // reader has been told once the headings are deleted.
+  const named = new Set<string>()
+  let inFence = false
   for (let i = 0; i < lines.length; i++) {
+    if (/^\s*```/.test(lines[i])) {
+      inFence = !inFence
+      continue
+    }
+    if (inFence) continue
     const h = lines[i].match(/^#{2,6}\s+(.+)/)
-    if (!h) continue
+    if (!h) {
+      if (!/^#\s/.test(lines[i])) for (const m of maskProse(lines[i]).matchAll(WORD)) named.add(stem(m[0]))
+      continue
+    }
+    const heading = h[1].trim()
     for (let j = i + 1; j < lines.length; j++) {
       const t = lines[j].trim()
       if (!t) continue
-      if (/^#{1,6}\s/.test(t) || /^(\||-|\*|\d+\.|>|```)/.test(t)) break
+      if (/^#{1,6}\s/.test(t) || BLOCK_START.test(t)) break
+      const at = lines[j].length - lines[j].trimStart().length
       const opener = REFERRING_OPENER.exec(t)
       if (opener) {
-        const at = lines[j].length - lines[j].trimStart().length
         out.push({
           line: j + 1,
           rule: 'heading-dependent-opener',
           excerpt: excerptAt(source[j], at, at + opener[0].length),
-          suggestion: `Opens on a referring word whose antecedent is the heading ("${h[1].trim()}"). Re-name the subject.`,
+          suggestion: `Opens on a referring word whose antecedent is the heading ("${heading}"). Re-name the subject.`,
+        })
+        break
+      }
+      if (/^(!\[|<)/.test(t)) break
+      // The paragraph, its wrapped lines joined with one space so a sentence
+      // that wraps is read whole. `starts` maps an index back to its line.
+      const starts: number[] = []
+      let para = ''
+      for (let m = j; m < lines.length; m++) {
+        const u = lines[m].trim()
+        if (!u || /^#{1,6}\s/.test(u) || (m > j && BLOCK_START.test(u))) break
+        starts.push(para.length + (para ? 1 : 0))
+        para += (para ? ' ' : '') + lines[m]
+      }
+      const prose = maskProse(para)
+      const ends = sentenceEnds(prose)
+      const sentence = prose.slice(0, ends[0] ?? prose.length)
+      // A one-sentence paragraph over a list, table or code block introduces
+      // it: "try these prompts" points at the prompts below.
+      const afterPara = lines.slice(j + starts.length).find((l) => l.trim())?.trim() ?? ''
+      if (ends.length <= 1 && BLOCK_START.test(afterPara)) break
+      const span = danglingDemonstrative(sentence, named)
+      if (span) {
+        let r = 0
+        while (r + 1 < starts.length && starts[r + 1] <= span[0]) r++
+        const from = span[0] - starts[r]
+        const to = Math.min(span[1] - starts[r], lines[j + r].length)
+        out.push({
+          line: j + r + 1,
+          rule: 'heading-dependent-opener',
+          excerpt: excerptAt(source[j + r], from, to),
+          suggestion: `"${para.slice(span[0], span[1])}" points back at the heading ("${heading}"); no sentence above names it. Name the thing.`,
         })
       }
       break
