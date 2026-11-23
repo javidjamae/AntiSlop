@@ -6,6 +6,14 @@ all from one commit. The tag is the version consumers pin.
 
 ## Unreleased
 
+### Changed
+
+- The repository moved to `highbeampub/AntiSlop`. Install from
+  `github:highbeampub/AntiSlop#vX.Y.Z`; the corpus report is now at
+  https://highbeampub.github.io/AntiSlop/. Existing `javidjamae/AntiSlop`
+  pins still resolve through GitHub's redirect, but the old report URL does
+  not.
+
 ### Fixed
 
 - `heading-dependent-opener` reads the whole first clause of a section's

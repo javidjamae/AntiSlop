@@ -95,7 +95,7 @@ on every tag push, monthly, and on demand, and publishes to four places:
 
 | Where | What it is good for |
 |---|---|
-| [javidjamae.github.io/AntiSlop](https://javidjamae.github.io/AntiSlop/) | A citable URL for the current numbers, rendered from `report.html` |
+| [highbeampub.github.io/AntiSlop](https://highbeampub.github.io/AntiSlop/) | A citable URL for the current numbers, rendered from `report.html` |
 | `corpus/REPORT.md` in this repo | The copy GitHub renders inline, and the one RULES.md cites |
 | Release assets | The measurement as it stood at a given version |
 | Workflow artifact | 90 days, including the raw `report.json` |
