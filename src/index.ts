@@ -888,6 +888,7 @@ const NOT_A_NOUN = new Set(
     is isn't are aren't was wasn't were weren't be been being am do does did doesn't don't didn't has have had hasn't haven't
     will won't would wouldn't can can't cannot could couldn't should shouldn't shall may might must
     not no nor never also only just even still really very too so then than now already always often enough
+    today tomorrow yesterday tonight later again soon instead first last next
     and or but if because unless while although though since until as
     of to in on at by for with from into onto about over under up down out off away back through after before between against without within
     all any each every some many much more most few less least other another such both either neither said
@@ -913,10 +914,11 @@ const BARE_OBJECT_FOLLOW = new Set(
 
 // "this year", "these days": a demonstrative that points at time, not at an
 // earlier noun. "this guide", "this post": one that points at the document.
+// "in this case", "that way", "this one": set phrases.
 const DEICTIC_NOUNS = new Set(
   words(`
     year years month months week weeks day days morning afternoon evening night tonight weekend weekends quarter season
-    spring summer fall autumn winter time times moment decade century point space
+    spring summer fall autumn winter time times moment decade century point space case way one
     post posts article articles guide guides page pages piece tutorial chapter section book essay video episode series site website newsletter
   `)
 )
@@ -943,9 +945,8 @@ const CLAUSE_AFTER_THAT = new Set(
   `)
 )
 
-const WORD = /[A-Za-z][A-Za-z0-9'-]*/g
+const WORD = /\p{L}[\p{L}\p{N}'-]*/gu
 
-/** A word reduced far enough that "command" and "commands" compare equal. */
 /** The forms a word may have in the singular, so "policies" meets "policy",
  * "shelves" meets "shelf" and "processes" meets "process". Matching too
  * many forms only ever leaves a finding out. */
@@ -964,10 +965,15 @@ function bareWord(w: string): string {
   return w.toLowerCase().replace(/'s$/, '').replace(/[-']+$/, '')
 }
 
-/** Prose with code spans and link targets blanked so their words are not read
- * as prose. Same length as the original, so indexes map straight back. */
+/** Prose with code spans, HTML comments and link targets blanked so their
+ * words are not read as prose. A code span keeps its opening backtick, so a
+ * demonstrative in front of one can see it ("set this `timeout` value"). Same
+ * length as the original, so indexes map straight back. */
 function maskProse(line: string): string {
-  return line.replace(/`[^`]*`/g, (m) => ' '.repeat(m.length)).replace(/\]\([^)]*\)/g, (m) => ']' + ' '.repeat(m.length - 1))
+  return line
+    .replace(/`[^`]*`/g, (m) => '`' + ' '.repeat(m.length - 1))
+    .replace(/<!--.*?-->/g, (m) => ' '.repeat(m.length))
+    .replace(/\]\([^)]*\)/g, (m) => ']' + ' '.repeat(m.length - 1))
 }
 
 interface Word {
@@ -988,10 +994,11 @@ function danglingDemonstrative(sentence: string, named: Set<string>): [number, n
     end: m.index! + m[0].length,
   }))
   const tight = (a: Word, b: Word | undefined) => !!b && /^\s+$/.test(sentence.slice(a.end, b.start))
-  // Only the first clause: past a comma, a bracket or a dash, the sentence has named things of its own for the demonstrative to point
-  // at ("records metrics, and provides a UI for browsing that data"). A comma
-  // inside a number ("1,000") is not a boundary.
-  const boundary = /(?<!\d),|,(?!\d)|[;(\u2013\u2014]/.exec(sentence)?.index ?? sentence.length
+  // Only the first clause: past a comma, a bracket or a dash (typed as one or
+  // two hyphens too), the sentence has named things of its own for the
+  // demonstrative to point at ("records metrics, and provides a UI for
+  // browsing that data"). A comma inside a number ("1,000") is not a boundary.
+  const boundary = /(?<!\d),|,(?!\d)|[;(\u2013\u2014]|\s--?\s/.exec(sentence)?.index ?? sentence.length
   // Something the sentence goes on to spell out: "do this: open the file".
   // Only a colon before a space or the end, so a URL or a time is not one.
   const colon = /:(?=\s|$)/.exec(sentence)?.index ?? -1
@@ -1005,6 +1012,8 @@ function danglingDemonstrative(sentence: string, named: Set<string>): [number, n
     // "that's missing" is "that is", not a determiner.
     if (/'s$/i.test(w.text)) continue
     if (colon > w.end) continue
+    // A code span right after it names the thing: "run this `npm install`".
+    if (/^\s*`/.test(sentence.slice(w.end))) continue
     const prev = k > 0 ? ws[k - 1].lower : ''
     if (w.lower === 'that' && COMPLEMENTIZER_BEFORE.has(prev)) continue
     // "all of that", "all those": a summary of what the sections above said.
@@ -1017,8 +1026,7 @@ function danglingDemonstrative(sentence: string, named: Set<string>): [number, n
       // summary of the sections above, which shows them in code and lists
       // more often than it names them in a sentence.
       if (w.lower === 'these' || w.lower === 'those' || KIND_WORDS.has(next.lower)) continue
-      const noun = next
-      if (DEICTIC_NOUNS.has(noun.lower)) continue
+      if (DEICTIC_NOUNS.has(next.lower)) continue
       // Past the first word, a word that reads as a verb ("and this makes",
       // "that matters", "that changed") or an adverb ("that really") makes
       // the demonstrative a pronoun or a relative, not a determiner.
@@ -1029,25 +1037,34 @@ function danglingDemonstrative(sentence: string, named: Set<string>): [number, n
         // capitalized word or a number starts a clause, and so does a verb
         // with its object after it ("files that cover most cases").
         if (/(?:[^s]s|ed)$/.test(prev)) continue
-        if (/^[A-Z0-9]/.test(next.text)) continue
+        if (/^[\p{Lu}\p{N}]/u.test(next.text)) continue
         if (tight(next, ws[k + 2]) && OPENS_OBJECT.has(ws[k + 2].lower)) continue
       }
-      if (forms(noun.text).some((f) => named.has(f) || seen.has(f))) continue
-      return [w.start, noun.end]
+      // The noun phrase: up to three words, to the first word that cannot be
+      // a noun or reads as a verb. Any of them named lets it through ("skip
+      // this optional step" after a list of steps).
+      const phrase = [next]
+      for (let n = k + 2; n < k + 4 && tight(ws[n - 1], ws[n]); n++) {
+        if (NOT_A_NOUN.has(ws[n].lower) || /(?:[^s]s|ed|ly)$/.test(ws[n].lower) || ws[n].start > boundary) break
+        phrase.push(ws[n])
+      }
+      if (phrase.some((p) => forms(p.text).some((f) => named.has(f) || seen.has(f)))) continue
+      return [w.start, phrase[phrase.length - 1].end]
     }
     // "set these up", "if you've tried this,": a bare demonstrative as an object.
     if (k === 0 || !(w.lower === 'this' || w.lower === 'these')) continue
-    if (prev === 'reading') continue
+    // "reading this" is the document; "like this" points at its example.
+    if (prev === 'reading' || prev === 'like') continue
     const closes = !next || /[.,;!?]/.test(sentence.slice(w.end, next.start)) || (tight(w, next) && BARE_OBJECT_FOLLOW.has(next.lower))
     if (closes) return [w.start, w.end]
   }
   return null
 }
 
-const BLOCK_START = /^(\||-|\*|\+|\d+\.|>|```|~~~)/
+const BLOCK_START = /^(\||-|\*|\+|\d+[.)]|>|```|~~~)/
 // What a one-sentence paragraph can introduce: a list, a table, code, or a
 // line that is all bold, a label over a run of examples ("**Resize:**").
-const INTRODUCED_BLOCK = /^([-*+]\s|\d+\.\s|\||```|~~~|\*\*[^*]+\*\*$)/
+const INTRODUCED_BLOCK = /^([-*+]\s|\d+[.)]\s|\||```|~~~|\*\*[^*]+\*\*$)/
 
 export function headingDependentOpeners(md: string): Violation[] {
   const out: Violation[] = []
@@ -1064,7 +1081,10 @@ export function headingDependentOpeners(md: string): Violation[] {
   let start = 0
   if (lines[0]?.trim() === '---' && /^[A-Za-z_][\w-]*\s*:/.test(lines[1] ?? '')) {
     const close = lines.findIndex((l, n) => n > 0 && /^(---|\.\.\.)\s*$/.test(l))
-    if (close > 0) start = close + 1
+    // Every line up to the close reads as YAML: a key, an indented value, a
+    // list item, a comment or a blank.
+    const yaml = (l: string) => /^(\s|[A-Za-z_][\w-]*\s*:|- |#|$)/.test(l)
+    if (close > 0 && lines.slice(1, close).every(yaml)) start = close + 1
   }
   // The open fence ("```" or "~~~", and its length), or null outside one.
   let fence: string | null = null
@@ -1079,7 +1099,9 @@ export function headingDependentOpeners(md: string): Violation[] {
     if (fence !== null) continue
     const h = lines[i].match(/^#{2,6}\s+(.+)/)
     if (!h) {
-      if (!/^#\s/.test(lines[i])) for (const m of maskProse(lines[i]).matchAll(WORD)) for (const f of forms(m[0])) named.add(f)
+      // An H1, an HTML line and a link definition name nothing for the reader.
+      if (!/^\s*(#\s|<|\[[^\]]+\]:)/.test(lines[i]))
+        for (const m of maskProse(lines[i]).matchAll(WORD)) for (const f of forms(m[0])) named.add(f)
       continue
     }
     const heading = h[1].trim()
@@ -1116,18 +1138,20 @@ export function headingDependentOpeners(md: string): Violation[] {
       // it: "try these prompts" points at the prompts below.
       let after = j + starts.length
       while (after < lines.length && !lines[after].trim()) after++
-      if (ends.length <= 1 && INTRODUCED_BLOCK.test(lines[after]?.trim() ?? '')) break
+      const next = lines[after] ?? ''
+      if (ends.length <= 1 && (INTRODUCED_BLOCK.test(next.trim()) || /^( {4}|\t)\S/.test(next))) break
       const span = danglingDemonstrative(sentence, named)
       if (span) {
         let r = 0
         while (r + 1 < starts.length && starts[r + 1] <= span[0]) r++
         const from = span[0] - starts[r]
-        const to = Math.min(span[1] - starts[r], lines[j + r].length)
+        let to = Math.min(span[1] - starts[r], lines[j + r].length)
+        while (to > from && isGap(lines[j + r][to - 1])) to--
         out.push({
           line: j + r + 1,
           rule: 'heading-dependent-opener',
           excerpt: excerptAt(source[j + r], from, to),
-          suggestion: `"${para.slice(span[0], span[1])}" points back at the heading ("${heading}"); no sentence above names it. Name the thing.`,
+          suggestion: `"${para.slice(span[0], span[1]).replace(/\s+/g, ' ')}" points back at the heading ("${heading}"); no sentence above names it. Name the thing.`,
         })
       }
       break
